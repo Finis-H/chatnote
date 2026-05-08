@@ -1,0 +1,100 @@
+import os
+import json
+
+class ToolRegistry:
+    def __init__(self, tools_dir="vault/tools"):
+        self.tools_dir = tools_dir
+        self.registered_names = set()
+        self.system_warnings = []
+        
+        # 1. 🛡️ 内置系统级原生工具 (System Built-ins)
+        self.tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "description": "连接互联网获取最新信息。当 Boss 询问新闻、实时数据、法律条文、天气、股票或未知的专业知识时，必须调用此工具。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "需要搜索引擎执行的精确搜索关键词"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            # 新增：将本地 RAG 封装为原生工具
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_local_knowledge",
+                    "description": "检索本地知识库。当 Boss 询问他自己的笔记、历史记忆、代码习惯、日程安排、财报记录或人际关系时，必须调用此工具。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "用于在向量空间中执行模糊匹配的核心搜索短语"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            }
+        ]
+        self.registered_names.add("web_search")
+        self.registered_names.add("search_local_knowledge")
+        # 2. 动态加载外部插件生态 (VPM 雏形)
+        self._load_external_tools()
+
+    def _load_external_tools(self):
+        """物理扫描 tools 目录，加载第三方 MCP/Agent 契约并执行防撞校验"""
+        os.makedirs(self.tools_dir, exist_ok=True)
+        for filename in os.listdir(self.tools_dir):
+            if not filename.endswith(".json"): continue
+            
+            filepath = os.path.join(self.tools_dir, filename)
+            with open(filepath, 'r', encoding='utf-8') as f:
+                try:
+                    tool_manifest = json.load(f)
+                    
+                    # 容错：处理被包在数组里的 JSON
+                    if isinstance(tool_manifest, dict):
+                        manifests = [tool_manifest]
+                    elif isinstance(tool_manifest, list):
+                        manifests = tool_manifest
+                    else:
+                        print(f"⚠️ [跳过] {filename} 格式不正确（需为字典或列表）。")
+                        continue
+                    for tool_manifest in manifests:
+                        # 按照 OpenAI 原生 Tool Calling 标准提取 name
+                        if "function" not in tool_manifest or "name" not in tool_manifest["function"]:
+                            print(f"⚠️ [跳过] {filename} 中的某项不符合原生 Tool Schema 标准。")
+                            continue       
+                        name = tool_manifest["function"]["name"]
+                    # 防撞击拦截
+                    if name in self.registered_names:
+                        print(f"⚠️ [警告] 发现冲突工具: {name} (文件: {filename})。已强制隔离。")
+                        self.system_warnings.append(f"工具库加载异常：发现冲突插件 '{name}'。")
+                        continue
+                    # 确保最外层有 "type": "function" 标识
+                    if "type" not in tool_manifest:
+                        tool_manifest["type"] = "function"
+
+                    self.tools.append(tool_manifest)
+                    self.registered_names.add(name)
+                    print(f"🔌 [VPM 挂载] 外部插件契约已就绪: {name}")
+
+                except json.JSONDecodeError as e:
+                    # 单独捕获 JSON 语法错误，方便排查格式问题
+                    print(f"🚨 契约解析失败 {filename}: JSON 格式错误 - {e}")    
+                except Exception as e:
+                    print(f"🚨 契约损坏 {filename}: {e}")
+
+    def get_tools(self):
+        """🚀 直接将标准的 Tools 数组暴露给大模型接口"""
+        # 如果没有任何工具，按 OpenAI 标准不能传空列表，必须返回 None
+        return self.tools if self.tools else None

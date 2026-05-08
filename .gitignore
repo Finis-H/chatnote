@@ -1,0 +1,81 @@
+# =========================
+# 1. Python 后端相关
+# =========================
+# 字节码缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 环境变量与机密配置（防止 API Keys 或模型服务的认证信息泄露）
+.env
+.env.*
+*.secret.json
+system_config.json
+
+# 运行日志
+*.log
+
+# =========================
+# 2. 前端 Tauri 相关 (Web + Rust)
+# =========================
+# Node.js 依赖及打包产物
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+
+# Tauri/Rust 编译产物 (这个文件夹会非常大，必须忽略)
+src-tauri/target/
+# 如果不需要追踪 Rust 的锁文件也可以取消下面这行的注释
+# src-tauri/Cargo.lock 
+
+# =========================
+# 3. 动态生成的资料与数据存储
+# =========================
+# 替换为你的“后端生成的资料文件夹”的实际名称
+# (例如：如果文件夹叫 output_data，就写 output_data/)
+vault/
+Briefing_Today.md
+chat_mode.py
+web_ui.py
+actions.jsonl
+session_draft.jsonl
+vault_tasks.json
+
+# 本地数据库与知识库文件 (如果你使用了本地向量数据库、RAG 数据持久化等)
+*.sqlite
+*.sqlite3
+*.db
+chroma_db/
+faiss_index/
+
+# 临时生成的文档或媒体文件
+*.md.tmp
+*.pdf.tmp
+temp_media/
+
+# =========================
+# 4. 操作系统与编辑器生成文件
+# =========================
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE 与编辑器配置 (视团队情况而定，一般建议忽略)
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
