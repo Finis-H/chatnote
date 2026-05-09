@@ -13,7 +13,9 @@ class ToolRegistry:
                 "type": "function",
                 "function": {
                     "name": "web_search",
-                    "description": "连接互联网获取最新信息。当 Boss 询问新闻、实时数据、法律条文、天气、股票或未知的专业知识时，必须调用此工具。",
+                    # ✅ 方案 A 的核心：重写工具描述 (Description)
+                    # 在这里给大模型下达最高指令，强迫它在调用搜索前先充当翻译官！
+                    "description": "这是一个强大的全球网络搜索引擎。【最高指令】：当检索全球前沿科技动态、AI大模型进展、外企新闻时，你 **必须** 将搜索词翻译为纯英文再传入！例如：不要传入 'openai大模型最新版本'，必须传入 'OpenAI latest model release'。",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -26,7 +28,7 @@ class ToolRegistry:
                     }
                 }
             },
-            # 新增：将本地 RAG 封装为原生工具
+            # 本地 RAG 封装为原生工具
             {
                 "type": "function",
                 "function": {
@@ -69,24 +71,27 @@ class ToolRegistry:
                     else:
                         print(f"⚠️ [跳过] {filename} 格式不正确（需为字典或列表）。")
                         continue
+                        
                     for tool_manifest in manifests:
                         # 按照 OpenAI 原生 Tool Calling 标准提取 name
                         if "function" not in tool_manifest or "name" not in tool_manifest["function"]:
                             print(f"⚠️ [跳过] {filename} 中的某项不符合原生 Tool Schema 标准。")
                             continue       
                         name = tool_manifest["function"]["name"]
-                    # 防撞击拦截
-                    if name in self.registered_names:
-                        print(f"⚠️ [警告] 发现冲突工具: {name} (文件: {filename})。已强制隔离。")
-                        self.system_warnings.append(f"工具库加载异常：发现冲突插件 '{name}'。")
-                        continue
-                    # 确保最外层有 "type": "function" 标识
-                    if "type" not in tool_manifest:
-                        tool_manifest["type"] = "function"
+                        
+                        # 🚨 修复 BUG：这段防撞击拦截必须缩进到 for 循环内部！
+                        if name in self.registered_names:
+                            print(f"⚠️ [警告] 发现冲突工具: {name} (文件: {filename})。已强制隔离。")
+                            self.system_warnings.append(f"工具库加载异常：发现冲突插件 '{name}'。")
+                            continue
+                            
+                        # 确保最外层有 "type": "function" 标识
+                        if "type" not in tool_manifest:
+                            tool_manifest["type"] = "function"
 
-                    self.tools.append(tool_manifest)
-                    self.registered_names.add(name)
-                    print(f"🔌 [VPM 挂载] 外部插件契约已就绪: {name}")
+                        self.tools.append(tool_manifest)
+                        self.registered_names.add(name)
+                        print(f"🔌 [VPM 挂载] 外部插件契约已就绪: {name}")
 
                 except json.JSONDecodeError as e:
                     # 单独捕获 JSON 语法错误，方便排查格式问题
