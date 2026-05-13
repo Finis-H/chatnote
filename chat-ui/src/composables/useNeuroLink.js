@@ -1,5 +1,6 @@
-import { ref, computed } from 'vue';
+import { ref, computed, shallowRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { loadVpmComponent } from '../utils/vpmLoader';
 
 // === 全局单例状态 (State) ===
 export const activeView = ref('chat');
@@ -7,6 +8,7 @@ export const previousView = ref('news');
 export const sysConfig = ref({ api_key: '', base_url: '', model_max: '', model_mini: '', embed_api_key: '', embed_base_url: '', embed_model: 'text-embedding-v4' });
 export const newsList = ref([]);
 export const favoritesList = ref([]);
+export const pluginsList = ref([]);
 export const globalMessages = ref([]);
 export const noteThreads = ref({});
 export const currentNote = ref({ id: null, title: '', content: '', file_path: '' });
@@ -15,6 +17,8 @@ export const isThinking = ref(false);
 export const userInput = ref('');
 export const systemToast = ref({ show: false, message: '' });
 export const inputError = ref(false);
+export const isImmersive = ref(false);
+export const activeAgentComponent = shallowRef(null);
 export const deleteModal = ref({ show: false, note: null });
 export const isImporting = ref(false);
 export const importFile = ref(null);
@@ -77,6 +81,7 @@ export function useNeuroLink() {
         }
         else if (data.type === 'news_list') newsList.value = data.content;
         else if (data.type === 'favorites_list') favoritesList.value = data.content;
+        else if (data.type === 'plugins_list') pluginsList.value = data.content;
         else if (data.type === 'note_content') currentNote.value.content = data.content;
         else if (data.type === 'delete_success') {
           newsList.value = newsList.value.filter(n => n.id !== data.id);
@@ -98,8 +103,8 @@ export function useNeuroLink() {
         else if (data.type === 'status' && data.content === 'done') {
           isThinking.value = false;
         }
-        else if (data.type === 'stream') {
-          const targetId = data.thread_id;
+        else if (data.type === 'stream' || data.type === 'chat_stream') {
+          const targetId = data.thread_id || 'global';
           const targetList = targetId === 'global' ? globalMessages.value : noteThreads.value[targetId];
           if (targetList && targetList.length > 0) {
             const lastMsg = targetList[targetList.length - 1];
@@ -111,6 +116,19 @@ export function useNeuroLink() {
         }
         else if (data.type === 'memory_data') pendingMemory.value = data.content;
         else if (data.type === 'system_toast') showToast("🩺 [管家汇报] " + data.content);
+        else if (data.type === 'ui_command') {
+          console.log(`🪄 收到中枢 UI 指令：${data.target_panel} -> ${data.state}`);
+          if (data.state === 'closed') {
+            activeAgentComponent.value = null;
+            return;
+          }
+          // 直接根据后端传来的 ID 动态去加载组件！
+          // 假设 data.target_panel 传的是 "music_agent"
+          // 约定 UI 的入口文件固定叫 "MainPanel" 或者跟插件同名
+          activeAgentComponent.value = loadVpmComponent(data.target_panel, 'MusicAgentPanel');
+          // 控制空间形态
+          isImmersive.value = (data.state === 'immersive');
+        }
       };
       
       ws.onclose = () => {
@@ -178,6 +196,7 @@ export function useNeuroLink() {
     if (viewName === 'news') sendWsCommand({ type: "fetch_news" });
     if (viewName === 'favorites') sendWsCommand({ type: "fetch_favorites" });
     if (viewName === 'settings') sendWsCommand({ type: "get_config" });
+    if (viewName === 'vpm_center') sendWsCommand({ type: "fetch_plugins" });
     if (viewName === 'memory') sendWsCommand({ type: "fetch_memory" });
   }
 
@@ -219,4 +238,25 @@ export function useNeuroLink() {
     connectWebSocket, destroyLink, sendChatCommand, switchView, openNote, 
     confirmDelete, saveSystemConfig, confirmImport, showToast, sendWsCommand
   };
+}
+
+// --- 🎧 情绪打碟机：全局播放状态 ---
+export const playerState = ref({
+  isActive: false,      // 底部播放条是否显示
+  isPlaying: false,     // 是否正在播放
+  currentSong: null,    // 当前播放的歌曲对象 { title, artist, url }
+  progress: 0,          // 播放进度 0-100
+});
+
+export function playSong(song) {
+  playerState.value.isActive = true;
+  playerState.value.currentSong = song;
+  playerState.value.isPlaying = true;
+  // TODO: 实际的音乐播放逻辑 (如操作隐藏的 iframe 或 Audio 实例)
+}
+
+export function togglePlay() {
+  if (!playerState.value.currentSong) return;
+  playerState.value.isPlaying = !playerState.value.isPlaying;
+  // TODO: 实际的暂停/恢复逻辑
 }

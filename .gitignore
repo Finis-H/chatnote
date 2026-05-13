@@ -59,6 +59,7 @@ faiss_index/
 *.md.tmp
 *.pdf.tmp
 temp_media/
+api_test.http
 
 # =========================
 # 4. 操作系统与编辑器生成文件

@@ -1,18 +1,47 @@
+from fastapi.responses import FileResponse
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import secrets
 import json
 import asyncio
 import os
-
+import importlib.util
+import time
+from sqlmodel import Session, select
+from db import engine, init_db
+from fastapi.staticfiles import StaticFiles
 # 引入管家大脑与核心总线
 from main import VaultOS_Terminal
 from core_bus import event_bus
 from agent_runner import spawn_agent_task
 
 app = FastAPI()
+# 跨域资源共享 (CORS) 放行配置
+# 允许前端 (localhost:1420) 通过 HTTP 拉取插件源码
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=False,
+    allow_methods=["*"], 
+    allow_headers=["*"], 
+)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PLUGINS_DIR = os.path.join(BASE_DIR, "vault", "plugins")
+os.makedirs(PLUGINS_DIR, exist_ok=True)
 
-# 🛡️ 核心防御
+@app.get("/plugins/{plugin_id}/ui/{file_name}")
+async def serve_plugin_ui(plugin_id: str, file_name: str):
+    safe_plugin = os.path.basename(plugin_id)
+    safe_file = os.path.basename(file_name)
+    file_path = os.path.join(PLUGINS_DIR, safe_plugin, "ui", safe_file)
+    
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    else:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="文件不存在")
+# 核心防御
 SECURITY_TOKEN = secrets.token_hex(16)
 os.makedirs("vault", exist_ok=True)
 with open("vault/.run_token", "w", encoding="utf-8") as f:
@@ -100,6 +129,25 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                         await websocket.send_json({"type": "memory_data", "content": json.load(f).get("queue", [])})
                 except Exception:
                     await websocket.send_json({"type": "memory_data", "content": []})
+            
+            # VPM 雷达扫描指令
+            elif cmd_type == "fetch_plugins":
+                plugins_info = []
+                if os.path.exists(PLUGINS_DIR):
+                    for p in os.listdir(PLUGINS_DIR):
+                        p_path = os.path.join(PLUGINS_DIR, p)
+                        manifest_file = os.path.join(p_path, "manifest.json")
+                        # 只有包含 manifest.json 的才算作合规插件
+                        if os.path.isdir(p_path) and os.path.exists(manifest_file):
+                            try:
+                                with open(manifest_file, 'r', encoding='utf-8') as mf:
+                                    info = json.load(mf)
+                                    info['plugin_id'] = p # 强行把物理文件夹名注入进去，作为唯一 ID
+                                    plugins_info.append(info)
+                            except Exception as e:
+                                print(f"🚨 [VPM] 解析插件 {p} 契约失败: {e}")
+                                
+                await websocket.send_json({"type": "plugins_list", "content": plugins_info})
 
             # === [通道 B：中等耗时的后台 IO 任务] ===
             elif cmd_type == "memory_surgery":
@@ -126,7 +174,8 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
 
             # === [通道 C：核心智能体网关 (重型推理)] ===
             elif "message" in request:
-                if not request.get("message"): continue
+                user_msg = request.get("message", "")
+                if not user_msg: continue
                 # 收到消息后，丢给独立引擎去跑，当前循环立刻进入下一次等待
                 asyncio.create_task(spawn_agent_task(raw_data, real_loop, vault_os))
 
@@ -136,6 +185,35 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
     except Exception as e:
         print(f"🔴 [网关异常] 通信循环崩溃: {str(e)}")
         consumer_task.cancel()
+# 2. 动态扫描并挂载第三方后端 API
+def mount_vpm_plugins():
+    for plugin_name in os.listdir(PLUGINS_DIR):
+        plugin_path = os.path.join(PLUGINS_DIR, plugin_name)
+        api_file = os.path.join(plugin_path, "api.py")
+        
+        # 如果插件包含后端路由文件
+        if os.path.isdir(plugin_path) and os.path.exists(api_file):
+            try:
+                # 动态导入 Python 模块
+                spec = importlib.util.spec_from_file_location(f"vpm.plugins.{plugin_name}", api_file)
+                plugin_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(plugin_module)
+                # 触发插件的初始化钩子 (建表、传参)
+                if hasattr(plugin_module, "init_plugin"):
+                    plugin_module.init_plugin(engine)
+                # 挂载插件的路由，自动分配隔离前缀
+                if hasattr(plugin_module, "router"):
+                    app.include_router(
+                        plugin_module.router, 
+                        prefix=f"/api/plugins/{plugin_name}", 
+                        tags=[f"Plugin: {plugin_name}"]
+                    )
+                    print(f"✅ [VPM 内核] 成功挂载插件后端路由: /api/plugins/{plugin_name}")
+                    
+            except Exception as e:
+                print(f"🚨 [VPM 内核] 挂载插件 {plugin_name} 失败: {e}")
+mount_vpm_plugins()
+init_db()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")

@@ -2,8 +2,8 @@
 import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
-import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, currentNote, useNeuroLink } from './composables/useNeuroLink';
-
+import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, currentNote, useNeuroLink, playerState, togglePlay } from './composables/useNeuroLink';
+import { activeAgentComponent, isImmersive } from './composables/useNeuroLink';
 import './assets/cyber-theme.css'; // 载入全局样式
 
 // 懒加载视窗组件，极致优化初始启动速度
@@ -12,8 +12,8 @@ const KnowledgeListView = defineAsyncComponent(() => import('./views/KnowledgeLi
 const NoteDetailView = defineAsyncComponent(() => import('./views/NoteDetailView.vue'));
 const MemoryStaging = defineAsyncComponent(() => import('./views/MemoryStaging.vue'));
 const SettingsView = defineAsyncComponent(() => import('./views/SettingsView.vue'));
+const VpmCenterView = defineAsyncComponent(() => import('./views/VpmCenterView.vue'));
 const ProfileImportView = defineAsyncComponent(() => import('./views/ProfileImportView.vue'));
-
 const { connectWebSocket, destroyLink, sendChatCommand, switchView, confirmDelete } = useNeuroLink();
 const appWindow = getCurrentWindow();
 const isSidebarCollapsed = ref(false);
@@ -56,6 +56,7 @@ onUnmounted(async () => {
     </div>
     
     <div class="workspace-body">
+      
       <aside class="sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
         <div class="nav-group">
           <div class="nav-item" :class="{active: activeView==='chat'}" @click="switchView('chat')">
@@ -77,10 +78,13 @@ onUnmounted(async () => {
           <div class="nav-item" :class="{active: activeView==='settings'}" @click="switchView('settings')">
             <span class="icon">⚙️</span><span class="label">引擎设置</span>
           </div>
+          <div class="nav-item" :class="{active: activeView==='vpm_center'}" @click="switchView('vpm_center')">
+            <span class="icon">📦</span><span class="label">插件中心</span>
+          </div>
         </div>
       </aside>
 
-      <main class="center-viewport">
+      <main class="center-viewport" :class="{ 'squeezed': activeAgentComponent && isImmersive }">
         <div class="view-content">
           <TerminalView v-show="activeView === 'chat'" />
           <KnowledgeListView v-if="activeView === 'news'" type="news" />
@@ -89,7 +93,29 @@ onUnmounted(async () => {
           <MemoryStaging v-if="activeView === 'memory'" />
           <SettingsView v-if="activeView === 'settings'" />
           <ProfileImportView v-if="activeView === 'profile_import'" />
+          <VpmCenterView v-if="activeView === 'vpm_center'" />
         </div>
+
+        <transition name="slide-up">
+          <div class="player-bar" v-if="playerState.isActive">
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: playerState.progress + '%' }"></div>
+            </div>
+            <div class="player-controls">
+              <div class="song-meta">
+                <span class="playing-icon" v-if="playerState.isPlaying">🎵</span>
+                <span class="p-title">{{ playerState.currentSong?.title }}</span>
+                <span class="p-artist">- {{ playerState.currentSong?.artist }}</span>
+              </div>
+              <div class="actions">
+                <button class="ctrl-btn" @click="togglePlay">
+                  {{ playerState.isPlaying ? '⏸' : '▶' }}
+                </button>
+                <button class="ctrl-btn close-btn" @click="playerState.isActive = false; playerState.isPlaying = false">×</button>
+              </div>
+            </div>
+          </div>
+        </transition>
 
         <div class="fixed-console" :class="{ 'error-shake': inputError }">
           <div class="context-pill" v-if="activeView==='note_detail'">📍 讨论中: {{ currentNote.title }}</div>
@@ -98,14 +124,16 @@ onUnmounted(async () => {
         </div>
       </main>
 
-      <aside class="sidebar side-right" :class="{ 'collapsed': isSidebarCollapsed }">
-        <div class="nav-group">
-          <div class="nav-item"><span class="icon">📓</span><span class="label">个人笔记</span></div>
+      <aside class="dynamic-sidebar" :class="{ 'sidebar-open': activeAgentComponent !== null, 'sidebar-immersive': isImmersive }">
+        <div class="sidebar-content" v-if="activeAgentComponent">
+          <component 
+            :is="activeAgentComponent" 
+            :is-immersive="isImmersive" 
+          />
         </div>
       </aside>
-    </div>
 
-    <div class="custom-modal-overlay" v-if="deleteModal.show" @click="cancelDelete">
+    </div> <div class="custom-modal-overlay" v-if="deleteModal.show" @click="cancelDelete">
       <div class="custom-modal" @click.stop>
         <div class="modal-icon">⚠️</div>
         <h3 class="modal-title">系统删除确认</h3>
@@ -147,7 +175,46 @@ onUnmounted(async () => {
 .badge { background: #ff4d4f; color: #fff; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 10px; margin-left: auto; }
 .pulse-anim { animation: pulse-glow 1.5s infinite; }
 
-.center-viewport { flex: 1; display: flex; flex-direction: column; background: #0d0d0f; min-width: 400px; overflow: hidden;}
+.center-viewport { 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  background: #0d0d0f; 
+  min-width: 400px; 
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); 
+}
+/* 沉浸态下的主视图被挤压变暗 */
+.center-viewport.squeezed {
+  opacity: 0.3;
+  transform: scale(0.98); 
+  pointer-events: none; /* 沉浸时防止误触主界面的按钮 */
+}
+.dynamic-sidebar {
+  width: 0; /* 默认隐藏 */
+  background: #0a0a0c;
+  border-left: 1px solid #1a1a1a;
+  transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 收缩时切断内部溢出 */
+  z-index: 50;
+}
+/* 形态 1：侧边栏唤醒（静默陪伴模式） */
+.dynamic-sidebar.sidebar-open {
+  width: 65px; 
+}
+/* 形态 2：沉浸覆盖模式（掌控模式） */
+.dynamic-sidebar.sidebar-immersive {
+  width: 70vw; /* 占据屏幕 70% 的宽度 */
+  box-shadow: -20px 0 50px rgba(0,0,0,0.8);
+  z-index: 100;
+}
+.sidebar-content {
+  width: 100%;
+  height: 100%;
+  min-width: 65px; /* 保证内部组件在缩放时不会变形乱折行 */
+}
 .view-content { flex: 1; overflow: hidden; display: flex; flex-direction: column;}
 
 .fixed-console { height: 65px; min-height: 65px; background: #050505; border-top: 1px solid #222; display: flex; align-items: center; padding: 0 25px; gap: 15px; position: relative; }
@@ -178,6 +245,21 @@ onUnmounted(async () => {
 .btn-cancel:hover { background: rgba(255,255,255,0.1); color: #fff; }
 .btn-confirm { background: rgba(255, 77, 79, 0.1); color: #ff4d4f; border: 1px solid rgba(255, 77, 79, 0.4); }
 .btn-confirm:hover { background: #ff4d4f; color: #000; box-shadow: 0 0 15px rgba(255, 77, 79, 0.4); }
+
+.player-bar { background: #0a0a0c; border-top: 1px solid #333; height: 50px; display: flex; flex-direction: column; z-index: 10;}
+.progress-bar { height: 2px; background: #222; width: 100%; }
+.progress-fill { height: 100%; background: #00ffcc; transition: width 0.3s; }
+.player-controls { display: flex; justify-content: space-between; align-items: center; padding: 0 20px; flex: 1; }
+.song-meta { font-size: 13px; display: flex; align-items: center; gap: 8px;}
+.p-title { color: #fff; font-weight: bold;}
+.p-artist { color: #888; }
+.ctrl-btn { background: none; border: none; color: #fff; font-size: 16px; cursor: pointer; }
+.ctrl-btn:hover { color: #00ffcc; }
+.close-btn { font-size: 20px; margin-left: 15px; color: #666; }
+
+/* 滑动动画 */
+.slide-up-enter-active, .slide-up-leave-active { transition: all 0.3s ease; }
+.slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); opacity: 0; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(20px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }

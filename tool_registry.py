@@ -7,7 +7,7 @@ class ToolRegistry:
         self.registered_names = set()
         self.system_warnings = []
         
-        # 1. 🛡️ 内置系统级原生工具 (System Built-ins)
+        # 1. 内置系统级原生工具 (System Built-ins)
         self.tools = [
             {
                 "type": "function",
@@ -45,6 +45,28 @@ class ToolRegistry:
                         "required": ["query"]
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "control_ui_layout",
+                    "description": "控制 Vault OS 前端界面的物理空间与布局。当 Boss 想要听歌、看图表，或者明确需要【沉浸式体验】时，你【只需且必须只】调用此单一工具！绝对禁止再组合调用 web_search 搜索推荐！",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "target_panel": {
+                                "type": "string",
+                                "description": "要控制的目标面板名称，例如 'music_agent', 'invest_agent'"
+                            },
+                            "state": {
+                                "type": "string",
+                                "enum": ["mini", "immersive", "closed"],
+                                "description": "面板的目标形态：mini(侧边栏静默陪伴), immersive(全屏沉浸覆盖), closed(关闭)"
+                            }
+                        },
+                        "required": ["target_panel", "state"]
+                    }
+                }
             }
         ]
         self.registered_names.add("web_search")
@@ -79,7 +101,7 @@ class ToolRegistry:
                             continue       
                         name = tool_manifest["function"]["name"]
                         
-                        # 🚨 修复 BUG：这段防撞击拦截必须缩进到 for 循环内部！
+                        # 这段防撞击拦截必须缩进到 for 循环内部！
                         if name in self.registered_names:
                             print(f"⚠️ [警告] 发现冲突工具: {name} (文件: {filename})。已强制隔离。")
                             self.system_warnings.append(f"工具库加载异常：发现冲突插件 '{name}'。")
@@ -100,6 +122,6 @@ class ToolRegistry:
                     print(f"🚨 契约损坏 {filename}: {e}")
 
     def get_tools(self):
-        """🚀 直接将标准的 Tools 数组暴露给大模型接口"""
+        """直接将标准的 Tools 数组暴露给大模型接口"""
         # 如果没有任何工具，按 OpenAI 标准不能传空列表，必须返回 None
         return self.tools if self.tools else None

@@ -137,7 +137,7 @@ class VaultOS_Terminal:
             api_key=safe_key,
             base_url=self.llm_config.get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1")
         )
-        if hasattr(self, 'vector_db'):
+        if hasattr(self, 'vector_db') and hasattr(self.vector_db, 'update_config'):
             self.vector_db.update_config(self.llm_config)
 
     def _load_threads_from_disk(self):
@@ -247,6 +247,12 @@ class VaultOS_Terminal:
                         if not progress_made and not [f for sid, f in step_futures.items() if not f.done()]:
                             print("⚠️ [DAG 引擎] 警告：发现无法满足的依赖逻辑环，强制中止剩余蓝图！")
                             break 
+                if any(step.get("tool_name") == "control_ui_layout" for step in steps):
+                    answer = "已为您开启。"
+                    self.threads[thread_id].append({'role': 'user', 'content': display_message})
+                    self.threads[thread_id].append({'role': 'assistant', 'content': answer})
+                    self._save_to_disk()
+                    return answer
                 retrieved_context = "【系统任务黑板数据 (各部门并发汇报结果)】:\n" + json.dumps(blackboard, ensure_ascii=False, indent=2)
             else:
                 retrieved_context = ""
@@ -412,22 +418,56 @@ class VaultOS_Terminal:
             print(f"🟢 [SYSTEM] {msg}")
             time.sleep(0.3)
 
-    # 🚨 核心修复：在此处统一动态获取绝对时间，并在每次请求前强行注入防火墙
+    # 在此处统一动态获取绝对时间，并在每次请求前强行注入防火墙
     def _call_llm(self, system_prompt, user_input, thread_id="global", save_to_memory=True, display_message=None, disable_tools=False):
         # 获取精确到分钟的动态时间
         current_time_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-        
         # 铸造认知防火墙
+        core_profile = ""
+        try:
+            with open(self.gatekeeper.profile_path, 'r', encoding='utf-8') as f:
+                profile_data = json.load(f)
+                # 评估画像是否实质性存在（排除空字典或极短的无效占位符）
+                if profile_data and len(str(profile_data)) > 15:
+                    core_profile = json.dumps(profile_data, ensure_ascii=False)
+        except Exception:
+            pass
+        # 3. 认知引擎路由：根据画像厚度，动态切换注意力权重
+        if core_profile:
+            # 模式 A：成熟体管家（画像为主，聊天为辅）
+            profile_strategy = f"""
+【⚠️ 最高权重：基岩画像驱动】
+以下是 Boss 的核心基岩画像与偏好设置：
+{core_profile}
+        
+**指令执行优先级**：
+你不是普通的聊天助手，你是基于上述【基岩画像】运行的专属管家。
+- 你在决定语气、代码风格、建议策略时，**必须 100% 遵从基岩画像**。
+- 下方附带的“短期历史对话”仅起辅助连贯作用。
+- **如果短期对话的内容与基岩画像发生冲突，永远、绝对以【基岩画像】为准！**
+"""
+        else:
+            # 模式 B：幼年体管家（平滑降级，以当前聊天上下文为主）
+            profile_strategy = """
+【🌱 当前状态：基岩画像收集中】
+Boss 的专属基岩画像尚未完全建立。
+**指令执行优先级**：
+请暂时以一个高度专业、灵活的通用 AI 管家身份运行。在此阶段，请**将下方的“短期历史对话”和 Boss 最新的指令作为最高执行优先级**。
+"""
+        # 4. 组装最终防火墙
         cognitive_firewall = f"""
         
 =========================
 【Vault OS 底层认知防火墙】
 1. [绝对时间锚点]：系统当前的真实时间是 {current_time_str}。
-2. [反幻觉铁律]：你的内部训练数据可能停留在过去。当你回答涉及“最新”、“现在”、“目前”、“版本”的问题时，绝对禁止使用训练记忆！
-3. [工具失败应对]：如果调用工具返回的结果为空、报错，或者提供的文档中没有答案，请如实回答“未检索到数据”，绝对禁止编造虚假的年份或版本号！
+2. [反幻觉铁律]：当回答涉及“最新”、“现在”、“版本”的问题时，绝对禁止使用你的内部训练数据！
+3. [工具失败应对]：如果搜索工具无结果，如实回答，绝对禁止编造虚假的年份或版本号！
+4. [终极闭嘴法则]：针对“打开面板”、“播放音乐”、“展开界面”等操作动作，完成工具调用后，你【只能并且必须只】回复：“已为您开启” 或 “指令已执行”。
+   🚨 警告：【绝对禁止】向 Boss 解释你的动作！【绝对禁止】说“我是一个AI没有真实播放功能”、“这是虚拟体验”、“为您推荐XXX”等任何破坏沉浸感的废话！多说一个字都将被视为系统故障！
+{profile_strategy}
 =========================
 """
-        # 将防火墙强行拼接到系统提示词的末尾，赋予其最高注意力权重
+        # 将防火墙强行拼接到系统提示词的末尾
         enhanced_system_prompt = system_prompt + cognitive_firewall
 
         if display_message is None: display_message = user_input
@@ -453,6 +493,13 @@ class VaultOS_Terminal:
                 for tool_call in response_message.tool_calls:
                     print(f"🛠️  [中枢指令] 管家大脑请求调用工具: {tool_call.function.name}")
                     tool_result = self.executor.execute(tool_call)
+                    if tool_call.function.name == "control_ui_layout":
+                        answer = "已为您开启。"
+                        if save_to_memory:
+                            self.threads[thread_id].append({'role': 'user', 'content': display_message})
+                            self.threads[thread_id].append({'role': 'assistant', 'content': answer})
+                            self._save_to_disk()
+                        return answer
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
@@ -496,36 +543,45 @@ class VaultOS_Terminal:
 
     def _compile_jit_task(self, user_input: str) -> dict:
         print("💡 [JIT 编译器] 正在为复杂任务绘制动态执行蓝图...")
-        
         # 让 CEO (JIT编译器) 也拥有时间观念
         current_time_str = datetime.now().strftime("%Y年%m月%d日")
         current_tools = self.registry.get_tools()
-        tool_names = [t['function']['name'] for t in current_tools] if current_tools else ["无可用工具"]
+        if current_tools:
+            tool_specs = [
+                {
+                    "name": t['function']['name'],
+                    "description": t['function']['description'],
+                    "parameters": t['function'].get('parameters', {})
+                }
+                for t in current_tools
+            ]
+        else:
+            tool_specs = ["无可用工具"]
         
         prompt = f"""
         你是 Vault OS 的 JIT 任务编译器 (CEO)。今天的时间是 {current_time_str}。
         主人的当前任务是: "{user_input}"
         
-        【你当前可用的工具 (手下的总监)】: 
-        {json.dumps(tool_names, ensure_ascii=False)}
+        【你当前可用的工具 (手下的总监) 及其参数说明】: 
+        {json.dumps(tool_specs, ensure_ascii=False)}
         
         【你的任务】：评估任务所需的能力。
         1. 如果现有工具足以完成任务，请规划一条清晰的执行步骤 (DAG)，并设定黑板需要记录的数据。
-        2. 如果现有工具【不足以】完美完成任务（例如需要查外部特定的旅游、法律、股票数据，但你没有对应的 API 工具），请中止规划，并主动向主人提出插件下载建议。
+        2. 如果现有工具【不足以】完美完成任务，请中止规划，并主动向主人提出插件下载建议。
 
         【强制输出 JSON 格式】：
         必须严格输出以下格式的 JSON，不要包含任何多余文字：
         {{
             "plan_status": "READY" | "NEEDS_NEW_TOOLS" | "DIRECT_CHAT",
-            "missing_capabilities": ["缺失的能力描述，如：日本新干线实时票务"],
+            "missing_capabilities": ["缺失的能力描述"],
             "suggestion_msg": "向 Boss 汇报的一句话建议",
             "blackboard_keys": ["需要记录在黑板上的变量名"],
             "steps": [
                 {{
                     "step_id": "s1",
-                    "tool_name": "web_search",
-                    "args": {{"query": "..."}},
-                    "output_to_blackboard": "weather_result"
+                    "tool_name": "对应工具的准确 name",
+                    "args": {{"参数名": "参数值"}}, // 必须严格遵守上方工具说明中的 parameters 结构！
+                    "output_to_blackboard": "输出变量名"
                 }}
             ],
             "reasoning": "一句话解释你的规划逻辑"

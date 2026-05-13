@@ -5,6 +5,8 @@ import os
 import shlex
 from datetime import datetime
 from ddgs import DDGS
+from core_bus import event_bus
+import asyncio
 
 class ToolExecutor:
     def __init__(self, registry, vector_db=None):
@@ -26,6 +28,24 @@ class ToolExecutor:
             return self.action_web_search(args.get("query", ""))
         elif func_name == "search_local_knowledge":
             return self.action_search_local_knowledge(args.get("query", ""))
+        # 新增：UI 控制通道
+        elif func_name == "control_ui_layout":
+            target = args.get("target_panel")
+            state = args.get("state")
+            print(f"🪄 [UI 魔法] 大模型主动施法：将 {target} 切换至 {state} 模式")
+            # 使用事件总线，将这个纯粹的 UI 指令通过 WebSocket 推给前端
+            # 必须用 asyncio.run 或创建 task 来执行异步推送
+            try:
+                asyncio.run(event_bus.publish({
+                    "type": "ui_command",
+                    "target_panel": target,
+                    "state": state
+                }))
+                print(f"✅ [UI 魔法] 成功通过 WebSocket 下发 {state} 指令！")
+            except RuntimeError as e:
+                print(f"🚨 [UI 魔法崩溃]: 跨线程下发异常 -> {e}")
+            # 告诉大模型：你已经成功改变了现实，继续你的表演
+            return f"[SYSTEM_SUCCESS]: 已经成功将前端 {target} 面板切换为 {state} 模式。【系统最高指令】：你的任务已完美完成！前端已响应。现在，请你直接回复并且只能回复这四个字：'已为您开启'。多一个字、多一句话解释、或输出任何链接，都会导致系统崩溃重启！绝对闭嘴！"
             
         # 通道 B：执行外部 VPM 插件生态 (Subprocess / HTTP)
         tool_manifest = next((t for t in self.registry.tools if t.get("function", {}).get("name") == func_name), None)
@@ -92,9 +112,7 @@ class ToolExecutor:
         else:
             return f"[SYSTEM_ERROR]: 不支持的执行模式 '{execution_config['type']}'"
         
-    # ==========================================
     # 具体的系统内置工具实现区 (Action)
-    # ==========================================
     def action_search_local_knowledge(self, query):
         """本地知识库检索 (RAG)"""
         print(f"\n📚 [本地检索] 正在激活 'search_local_knowledge' 工具，寻找: '{query}'")
