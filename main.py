@@ -203,8 +203,18 @@ class VaultOS_Terminal:
                 
                 def run_step(step_data):
                     tool_name = step_data.get("tool_name")
-                    args = step_data.get("args", {})
+                    raw_args = step_data.get("args", {})
                     output_key = step_data.get("output_to_blackboard")
+                    # 核心防线：动态参数解析 (主引擎负责把黑板数据喂给插件)
+                    resolved_args = {}
+                    with bb_lock:
+                        for k, v in raw_args.items():
+                            # 如果参数值是以 $$ 开头的字符串，说明需要去黑板取值
+                            if isinstance(v, str) and v.startswith("$$"):
+                                bb_key = v[2:]
+                                resolved_args[k] = blackboard.get(bb_key, v) # 取不到就保留原值
+                            else:
+                                resolved_args[k] = v
                     
                     print(f"   -> 🚀 [并发激活] 委派任务至: {tool_name} ...")
                     class MockToolCall:
@@ -214,7 +224,7 @@ class VaultOS_Terminal:
                                 self.arguments = arguments
                         def __init__(self, name, arguments):
                             self.function = self.MockFunction(name, arguments)
-                    step_result = self.executor.execute(MockToolCall(tool_name, json.dumps(args)))
+                    step_result = self.executor.execute(MockToolCall(tool_name, json.dumps(resolved_args)))
                     if output_key:
                         with bb_lock:
                             blackboard[output_key] = step_result
@@ -253,7 +263,17 @@ class VaultOS_Terminal:
                     self.threads[thread_id].append({'role': 'assistant', 'content': answer})
                     self._save_to_disk()
                     return answer
-                retrieved_context = "【系统任务黑板数据 (各部门并发汇报结果)】:\n" + json.dumps(blackboard, ensure_ascii=False, indent=2)
+                # 新增：Token 防爆墙，对黑板中的超大文本进行静默截断
+                safe_blackboard = {}
+                for k, v in blackboard.items():
+                    v_str = str(v)
+                    # 如果某个插件返回了极其巨大的字符串（如网页源码、长篇文章），强制截断以保护主模型的 Token
+                    if len(v_str) > 800:
+                        safe_blackboard[k] = v_str[:800] + "... [系统提示：内容过长已触发安全截断，已省略后续数据]"
+                    else:
+                        safe_blackboard[k] = v
+                        
+                retrieved_context = "【系统任务黑板数据 (各部门并发汇报结果)】:\n" + json.dumps(safe_blackboard, ensure_ascii=False, indent=2)
             else:
                 retrieved_context = ""
                 
@@ -268,14 +288,12 @@ class VaultOS_Terminal:
             
             final_system_prompt = self.assembler.assemble(display_message, retrieved_context)
             print("🔥 [核心算力] 正在生成最终回复...")
-            should_disable_tools = True if status == "READY" else False
             answer = self._call_llm(
                 final_system_prompt, 
                 user_input, 
                 thread_id=thread_id, 
                 save_to_memory=False, 
-                display_message=display_message,
-                disable_tools=should_disable_tools
+                display_message=display_message
             )
             self.threads[thread_id].append({'role': 'user', 'content': display_message})
             self.threads[thread_id].append({'role': 'assistant', 'content': answer})
@@ -418,23 +436,19 @@ class VaultOS_Terminal:
             print(f"🟢 [SYSTEM] {msg}")
             time.sleep(0.3)
 
-    # 在此处统一动态获取绝对时间，并在每次请求前强行注入防火墙
-    def _call_llm(self, system_prompt, user_input, thread_id="global", save_to_memory=True, display_message=None, disable_tools=False):
-        # 获取精确到分钟的动态时间
+    # 纯净版 _call_llm (管家只需看黑板说话，严禁私自调工具！)
+    def _call_llm(self, system_prompt, user_input, thread_id="global", save_to_memory=True, display_message=None):
         current_time_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-        # 铸造认知防火墙
         core_profile = ""
         try:
             with open(self.gatekeeper.profile_path, 'r', encoding='utf-8') as f:
                 profile_data = json.load(f)
-                # 评估画像是否实质性存在（排除空字典或极短的无效占位符）
                 if profile_data and len(str(profile_data)) > 15:
                     core_profile = json.dumps(profile_data, ensure_ascii=False)
         except Exception:
             pass
-        # 3. 认知引擎路由：根据画像厚度，动态切换注意力权重
+
         if core_profile:
-            # 模式 A：成熟体管家（画像为主，聊天为辅）
             profile_strategy = f"""
 【⚠️ 最高权重：基岩画像驱动】
 以下是 Boss 的核心基岩画像与偏好设置：
@@ -442,32 +456,24 @@ class VaultOS_Terminal:
         
 **指令执行优先级**：
 你不是普通的聊天助手，你是基于上述【基岩画像】运行的专属管家。
-- 你在决定语气、代码风格、建议策略时，**必须 100% 遵从基岩画像**。
-- 下方附带的“短期历史对话”仅起辅助连贯作用。
-- **如果短期对话的内容与基岩画像发生冲突，永远、绝对以【基岩画像】为准！**
+- 你在决定语气、代码风格、建议策略时，必须 100% 遵从基岩画像。
+- 如果短期对话的内容与基岩画像发生冲突，永远、绝对以【基岩画像】为准！
 """
         else:
-            # 模式 B：幼年体管家（平滑降级，以当前聊天上下文为主）
             profile_strategy = """
 【🌱 当前状态：基岩画像收集中】
-Boss 的专属基岩画像尚未完全建立。
-**指令执行优先级**：
-请暂时以一个高度专业、灵活的通用 AI 管家身份运行。在此阶段，请**将下方的“短期历史对话”和 Boss 最新的指令作为最高执行优先级**。
+Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、灵活的通用 AI 管家身份运行。
 """
-        # 4. 组装最终防火墙
-        cognitive_firewall = f"""
         
+        cognitive_firewall = f"""
 =========================
 【Vault OS 底层认知防火墙】
 1. [绝对时间锚点]：系统当前的真实时间是 {current_time_str}。
 2. [反幻觉铁律]：当回答涉及“最新”、“现在”、“版本”的问题时，绝对禁止使用你的内部训练数据！
 3. [工具失败应对]：如果搜索工具无结果，如实回答，绝对禁止编造虚假的年份或版本号！
-4. [终极闭嘴法则]：针对“打开面板”、“播放音乐”、“展开界面”等操作动作，完成工具调用后，你【只能并且必须只】回复：“已为您开启” 或 “指令已执行”。
-   🚨 警告：【绝对禁止】向 Boss 解释你的动作！【绝对禁止】说“我是一个AI没有真实播放功能”、“这是虚拟体验”、“为您推荐XXX”等任何破坏沉浸感的废话！多说一个字都将被视为系统故障！
 {profile_strategy}
 =========================
 """
-        # 将防火墙强行拼接到系统提示词的末尾
         enhanced_system_prompt = system_prompt + cognitive_firewall
 
         if display_message is None: display_message = user_input
@@ -477,45 +483,15 @@ Boss 的专属基岩画像尚未完全建立。
         messages.append({'role': 'user', 'content': user_input})
 
         try:
+            # 🚀 彻底移除了 tools 和 tool_choice 参数！管家现在是个纯粹的语言生成器！
             api_params = {
                 "model": self.llm_config.get("model_max", "qwen-max"), 
                 "messages": messages
             }
-            available_tools = self.registry.get_tools()
-            if available_tools and not disable_tools:
-                api_params["tools"] = available_tools
-                api_params["tool_choice"] = "auto"
                 
             response = self.client.chat.completions.create(**api_params, timeout=30)
-            response_message = response.choices[0].message
-            if getattr(response_message, 'tool_calls', None):
-                messages.append(response_message)
-                for tool_call in response_message.tool_calls:
-                    print(f"🛠️  [中枢指令] 管家大脑请求调用工具: {tool_call.function.name}")
-                    tool_result = self.executor.execute(tool_call)
-                    if tool_call.function.name == "control_ui_layout":
-                        answer = "已为您开启。"
-                        if save_to_memory:
-                            self.threads[thread_id].append({'role': 'user', 'content': display_message})
-                            self.threads[thread_id].append({'role': 'assistant', 'content': answer})
-                            self._save_to_disk()
-                        return answer
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": str(tool_result)
-                    })
-                print("🧠 [认知融合] 已获取外部工具数据，正在生成最终汇报...")
-                second_response = self.client.chat.completions.create(
-                    model=self.llm_config.get("model_max", "qwen-max"),
-                    messages=messages,
-                    timeout=30
-                )
-                raw_content = second_response.choices[0].message.content
-                answer = raw_content if raw_content else "【系统提示：管家已经拿到数据，但未能成功生成自然语言总结。】"
-            else:
-                raw_content = response_message.content
-                answer = raw_content if raw_content else "【系统提示：管家思考完毕，但未返回任何实质内容。】"
+            raw_content = response.choices[0].message.content
+            answer = raw_content if raw_content else "【系统提示：管家思考完毕，但未返回任何实质内容。】"
 
             if save_to_memory:
                 self.threads[thread_id].append({'role': 'user', 'content': display_message})
@@ -582,6 +558,13 @@ Boss 的专属基岩画像尚未完全建立。
                     "tool_name": "对应工具的准确 name",
                     "args": {{"参数名": "参数值"}}, // 必须严格遵守上方工具说明中的 parameters 结构！
                     "output_to_blackboard": "输出变量名"
+                }}
+                {{
+                    "step_id": "s2",
+                    "depends_on": ["s1"],
+                    "tool_name": "另一个工具",
+                    "args": {{"file_data": "$$s1的输出变量名"}}, // 🚀 重点：使用 $$前缀 引用黑板上的数据传递给下个工具！
+                    "output_to_blackboard": null
                 }}
             ],
             "reasoning": "一句话解释你的规划逻辑"

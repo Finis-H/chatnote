@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
-import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, currentNote, useNeuroLink, playerState, togglePlay } from './composables/useNeuroLink';
+import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, currentNote, useNeuroLink } from './composables/useNeuroLink';
 import { activeAgentComponent, isImmersive } from './composables/useNeuroLink';
 import './assets/cyber-theme.css'; // 载入全局样式
 
@@ -95,27 +95,6 @@ onUnmounted(async () => {
           <ProfileImportView v-if="activeView === 'profile_import'" />
           <VpmCenterView v-if="activeView === 'vpm_center'" />
         </div>
-
-        <transition name="slide-up">
-          <div class="player-bar" v-if="playerState.isActive">
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: playerState.progress + '%' }"></div>
-            </div>
-            <div class="player-controls">
-              <div class="song-meta">
-                <span class="playing-icon" v-if="playerState.isPlaying">🎵</span>
-                <span class="p-title">{{ playerState.currentSong?.title }}</span>
-                <span class="p-artist">- {{ playerState.currentSong?.artist }}</span>
-              </div>
-              <div class="actions">
-                <button class="ctrl-btn" @click="togglePlay">
-                  {{ playerState.isPlaying ? '⏸' : '▶' }}
-                </button>
-                <button class="ctrl-btn close-btn" @click="playerState.isActive = false; playerState.isPlaying = false">×</button>
-              </div>
-            </div>
-          </div>
-        </transition>
 
         <div class="fixed-console" :class="{ 'error-shake': inputError }">
           <div class="context-pill" v-if="activeView==='note_detail'">📍 讨论中: {{ currentNote.title }}</div>
@@ -245,17 +224,6 @@ onUnmounted(async () => {
 .btn-cancel:hover { background: rgba(255,255,255,0.1); color: #fff; }
 .btn-confirm { background: rgba(255, 77, 79, 0.1); color: #ff4d4f; border: 1px solid rgba(255, 77, 79, 0.4); }
 .btn-confirm:hover { background: #ff4d4f; color: #000; box-shadow: 0 0 15px rgba(255, 77, 79, 0.4); }
-
-.player-bar { background: #0a0a0c; border-top: 1px solid #333; height: 50px; display: flex; flex-direction: column; z-index: 10;}
-.progress-bar { height: 2px; background: #222; width: 100%; }
-.progress-fill { height: 100%; background: #00ffcc; transition: width 0.3s; }
-.player-controls { display: flex; justify-content: space-between; align-items: center; padding: 0 20px; flex: 1; }
-.song-meta { font-size: 13px; display: flex; align-items: center; gap: 8px;}
-.p-title { color: #fff; font-weight: bold;}
-.p-artist { color: #888; }
-.ctrl-btn { background: none; border: none; color: #fff; font-size: 16px; cursor: pointer; }
-.ctrl-btn:hover { color: #00ffcc; }
-.close-btn { font-size: 20px; margin-left: 15px; color: #666; }
 
 /* 滑动动画 */
 .slide-up-enter-active, .slide-up-leave-active { transition: all 0.3s ease; }

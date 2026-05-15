@@ -77,10 +77,23 @@ class ToolRegistry:
     def _load_external_tools(self):
         """物理扫描 tools 目录，加载第三方 MCP/Agent 契约并执行防撞校验"""
         os.makedirs(self.tools_dir, exist_ok=True)
-        for filename in os.listdir(self.tools_dir):
+        # 1. 扫描公共工具目录 (vault/tools/*.json)
+        self._scan_folder(self.tools_dir)
+        # 2. 扫描插件私有工具目录 (vault/plugins/*/tools/*.json)
+        plugins_root = "vault/plugins"
+        if os.path.exists(plugins_root):
+            for plugin_name in os.listdir(plugins_root):
+                plugin_tool_dir = os.path.join(plugins_root, plugin_name, "tools")
+                if os.path.exists(plugin_tool_dir):
+                    self._scan_folder(plugin_tool_dir)
+        
+    def _scan_folder(self, folder_path):
+        if not os.path.exists(folder_path):
+            return
+        for filename in os.listdir(folder_path):
             if not filename.endswith(".json"): continue
             
-            filepath = os.path.join(self.tools_dir, filename)
+            filepath = os.path.join(folder_path, filename)
             with open(filepath, 'r', encoding='utf-8') as f:
                 try:
                     tool_manifest = json.load(f)

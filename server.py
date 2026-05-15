@@ -7,6 +7,7 @@ import json
 import asyncio
 import os
 import importlib.util
+import shutil
 import time
 from sqlmodel import Session, select
 from db import engine, init_db
@@ -129,7 +130,6 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                         await websocket.send_json({"type": "memory_data", "content": json.load(f).get("queue", [])})
                 except Exception:
                     await websocket.send_json({"type": "memory_data", "content": []})
-            
             # VPM 雷达扫描指令
             elif cmd_type == "fetch_plugins":
                 plugins_info = []
@@ -148,7 +148,33 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                                 print(f"🚨 [VPM] 解析插件 {p} 契约失败: {e}")
                                 
                 await websocket.send_json({"type": "plugins_list", "content": plugins_info})
-
+            # VPM 物理卸载指令
+            elif cmd_type == "uninstall_plugin":
+                plugin_id = request.get("plugin_id")
+                safe_id = os.path.basename(plugin_id) 
+                plugin_path = os.path.join(PLUGINS_DIR, safe_id)
+                api_file = os.path.join(plugin_path, "api.py")
+                
+                if os.path.exists(plugin_path):
+                    try:
+                        # 1. 尝试调用插件专属的自毁钩子 (Lifecycle Hook)
+                        if os.path.exists(api_file):
+                            import importlib.util
+                            spec = importlib.util.spec_from_file_location(f"vpm.temp.{safe_id}", api_file)
+                            plugin_module = importlib.util.module_from_spec(spec)
+                            spec.loader.exec_module(plugin_module)
+                            
+                            # 如果插件提供了卸载钩子，把数据库引擎传给它让它自己清理
+                            if hasattr(plugin_module, "uninstall_hook"):
+                                plugin_module.uninstall_hook(engine)
+                        
+                        # 2. 主引擎执行最终的物理屠魔：连根拔起插件文件夹
+                        shutil.rmtree(plugin_path) 
+                        
+                        await websocket.send_json({"type": "plugin_uninstalled_success", "plugin_id": safe_id})
+                        await websocket.send_json({"type": "system_toast", "content": f"💥 插件 [{safe_id}] 已彻底卸载！"})
+                    except Exception as e:
+                        await websocket.send_json({"type": "system_toast", "content": f"🚨 卸载崩溃: {e}"})
             # === [通道 B：中等耗时的后台 IO 任务] ===
             elif cmd_type == "memory_surgery":
                 # 交给线程池处理，避免卡死当前通信

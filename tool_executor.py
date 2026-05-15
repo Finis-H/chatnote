@@ -82,6 +82,8 @@ class ToolExecutor:
 
             def replace_vars(node):
                 if isinstance(node, str):
+                    if node == "{args}":
+                        return args
                     for k, v in args.items():
                         if f"{{{k}}}" == node:
                             return v

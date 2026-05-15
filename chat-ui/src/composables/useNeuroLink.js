@@ -82,6 +82,9 @@ export function useNeuroLink() {
         else if (data.type === 'news_list') newsList.value = data.content;
         else if (data.type === 'favorites_list') favoritesList.value = data.content;
         else if (data.type === 'plugins_list') pluginsList.value = data.content;
+        else if (data.type === 'plugin_uninstalled_success') {
+          pluginsList.value = pluginsList.value.filter(p => p.plugin_id !== data.plugin_id);
+        }
         else if (data.type === 'note_content') currentNote.value.content = data.content;
         else if (data.type === 'delete_success') {
           newsList.value = newsList.value.filter(n => n.id !== data.id);
@@ -122,12 +125,29 @@ export function useNeuroLink() {
             activeAgentComponent.value = null;
             return;
           }
-          // 直接根据后端传来的 ID 动态去加载组件！
-          // 假设 data.target_panel 传的是 "music_agent"
-          // 约定 UI 的入口文件固定叫 "MainPanel" 或者跟插件同名
-          activeAgentComponent.value = loadVpmComponent(data.target_panel, 'MusicAgentPanel');
-          // 控制空间形态
+          if (!data.target_component) {
+              console.error(`🚨 [VPM 协议错误] 缺少 target_component，无法加载 UI`);
+              return;
+          }
+          activeAgentComponent.value = loadVpmComponent(data.target_panel, data.target_component);
           isImmersive.value = (data.state === 'immersive');
+        }
+        // 【VPM 泛用型盲传网关】(主程序通用逻辑，永不包含具体业务词汇)
+        else if (data.target_panel) {
+            // 1. 无脑唤起目标插件面板
+            if (!data.target_component) {
+                console.error(`🚨 [VPM 协议错误] 插件数据包缺少 target_component，无法渲染 UI`);
+                return;
+            }
+            activeAgentComponent.value = loadVpmComponent(data.target_panel, data.target_component);
+            isImmersive.value = true;
+            // 2. 将数据包打包进该插件的专属频段 (例如：vpm_ws_music_agent) 并广播
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent(`vpm_ws_${data.target_panel}`, { 
+                detail: data 
+              }));
+            }, 300); // 预留 300ms 挂载时间
+            return; 
         }
       };
       
@@ -238,25 +258,4 @@ export function useNeuroLink() {
     connectWebSocket, destroyLink, sendChatCommand, switchView, openNote, 
     confirmDelete, saveSystemConfig, confirmImport, showToast, sendWsCommand
   };
-}
-
-// --- 🎧 情绪打碟机：全局播放状态 ---
-export const playerState = ref({
-  isActive: false,      // 底部播放条是否显示
-  isPlaying: false,     // 是否正在播放
-  currentSong: null,    // 当前播放的歌曲对象 { title, artist, url }
-  progress: 0,          // 播放进度 0-100
-});
-
-export function playSong(song) {
-  playerState.value.isActive = true;
-  playerState.value.currentSong = song;
-  playerState.value.isPlaying = true;
-  // TODO: 实际的音乐播放逻辑 (如操作隐藏的 iframe 或 Audio 实例)
-}
-
-export function togglePlay() {
-  if (!playerState.value.currentSong) return;
-  playerState.value.isPlaying = !playerState.value.isPlaying;
-  // TODO: 实际的暂停/恢复逻辑
 }

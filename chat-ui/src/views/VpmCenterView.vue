@@ -15,8 +15,8 @@
         <div class="card-footer">
           <span class="p-author">Author: {{ plugin.author }}</span>
           <div class="p-actions">
-            <button class="btn-setting" title="配置">⚙️</button>
-            <button class="btn-uninstall" title="卸载">🗑️</button>
+            <button class="btn-setting" title="配置" @click="openManager(plugin.plugin_id)">⚙️ 管理</button>
+            <button class="btn-uninstall" title="卸载" @click="confirmUninstall(plugin.plugin_id, plugin.name)">🗑️</button>
           </div>
         </div>
       </div>
@@ -27,10 +27,29 @@
       <p>雷达未扫描到已安装的合规 VPM 插件。</p>
     </div>
   </div>
+  <transition name="fade">
+      <component v-if="activeManager" :is="activeManager" @close="activeManager = null" />
+    </transition>
 </template>
 
 <script setup>
-import { pluginsList } from '../composables/useNeuroLink.js'; // 路径按你实际的调整
+import { ref } from 'vue';
+import { pluginsList, useNeuroLink } from '../composables/useNeuroLink.js'; 
+import { loadVpmComponent } from '../utils/vpmLoader.js';
+
+const { sendWsCommand, showToast } = useNeuroLink();
+const activeManager = ref(null);
+const openManager = (pluginId) => {
+  activeManager.value = loadVpmComponent(pluginId, 'Manager');
+};
+const confirmUninstall = (pluginId, pluginName) => {
+  // 采用通用的兜底警告词，适用于所有自带数据的插件
+  const msg = `⚠️ 正在执行物理卸载 [${pluginName}]。\n\n这将永久销毁该插件产生的所有本地专属资产（包括图床、媒体文件）以及管家的底层 RAG 记忆。\n\n💡 强烈建议：在卸载前，先进入该插件的“配置/管理”面板执行【导出备份】。\n\n确定要继续执行“焦土政策”吗？`;
+  
+  if (window.confirm(msg)) {
+    sendWsCommand({ type: "uninstall_plugin", plugin_id: pluginId });
+  }
+};
 </script>
 
 <style scoped>
@@ -55,4 +74,6 @@ import { pluginsList } from '../composables/useNeuroLink.js'; // 路径按你实
 .btn-uninstall:hover { color: #ff4d4f !important; }
 
 .empty-state { text-align: center; margin-top: 100px; color: #555; font-family: 'Consolas'; position: relative;}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
