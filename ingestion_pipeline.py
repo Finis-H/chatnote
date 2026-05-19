@@ -1,10 +1,11 @@
 import os
 import re
+from main import VAULT_ROOT
 # 暂时保留,等后续直接在主流程调用(做独立笔记管理agent或脚本用)
 class MarkdownSemanticSplitter:
-    def __init__(self, inbox_dir="vault/knowledge/inbox", archive_dir="vault/knowledge/archives"):
-        self.inbox_dir = inbox_dir
-        self.archive_dir = archive_dir
+    def __init__(self, inbox_dir=None, archive_dir=None):
+        self.inbox_dir = inbox_dir or os.path.join(VAULT_ROOT, "knowledge", "inbox")
+        self.archive_dir = archive_dir or os.path.join(VAULT_ROOT, "knowledge", "archives")
         
     def split_document(self, text, filename):
         """核心算法：护盾与手术刀"""
@@ -62,7 +63,7 @@ class MarkdownSemanticSplitter:
 
 if __name__ == "__main__":
     # 测试桩：在 inbox 造一个测试文件
-    os.makedirs("vault/knowledge/inbox", exist_ok=True)
+    os.makedirs(os.path.join(VAULT_ROOT, "knowledge", "inbox"), exist_ok=True)
     
     # 巧妙利用 chr(96) 动态生成 Markdown 的三个反引号，彻底避开前端渲染器的截断 Bug
     bq = chr(96) * 3
@@ -85,7 +86,7 @@ def get_db_connection():
 """
     
     # 1. 写入测试文件
-    test_file_path = "vault/knowledge/inbox/test_db.md"
+    test_file_path = os.path.join(VAULT_ROOT, "knowledge", "inbox", "test_db.md")
     with open(test_file_path, "w", encoding="utf-8") as f:
         f.write(test_md.strip())
 

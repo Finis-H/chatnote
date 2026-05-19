@@ -1,11 +1,12 @@
 import os
 import json
+from main import VAULT_ROOT
 
 class RAGAssembler:
     def __init__(self, max_tokens=6000):
         self.max_tokens = max_tokens
-        self.profile_path = "vault/core_profile.json"       # Type 1: 物理基岩
-        self.cognitive_path = "vault/cognitive_map.json"    # Type 2: 认知图谱
+        self.profile_path = os.path.join(VAULT_ROOT, "core_profile.json")       # Type 1: 物理基岩
+        self.cognitive_path = os.path.join(VAULT_ROOT, "cognitive_map.json")    # Type 2: 认知图谱
 
     def _load_json(self, path):
         """通用 JSON 读取器"""
@@ -83,7 +84,10 @@ class RAGAssembler:
 【🎖️ 回答最高指导原则 (不可违背)】
 1. 你的回答风格、代码格式必须【严格映射】上述法则中的要求。
 2. 绝对不要在回答中主动提及“根据你的画像法则”、“根据你的认知图谱”这类废话。像人类一样自然地表现出你懂他。
-3. 如果外部知识中有答案，优先提炼外部知识；如果没有，大胆使用本体知识，但绝不编造。
-4. 【强制输出化约束】：如果是生成草稿摘要，必须控制在 100 字以内，并且必须在内容末尾附上来源 URL。如果是生成标题，必须简短且高度贴合主干内容。
+3. 🚨【系统防幻觉铁律】：如果简报中包含底层的执行结果，你只需总结润色，绝对禁止你自己去编造不存在的数据或动作！
+4. ⚖️【知识冲突降维法则 (最高优先级)】：当【系统并发行动简报】中同时存在“【本地档案库检索结果】”与“【最新网络搜索结果】”，或外部结果与 Boss 的【物理基岩/认知图谱】发生冲突时：
+   - 绝对偏袒：永远以 Boss 的本地知识、物理基岩为最高真理。Boss 的习惯、指定的版本号、特殊偏好，凌驾于外部客观世界的通用结论之上。
+   - 优雅缝合：不要生硬地向 Boss 汇报“本地知识和网络搜索冲突”。应以 Boss 的本地偏好为主轴，将网络新鲜资讯作为客体参考。例如：“Boss，虽然目前网上流行 X 方案，但基于您一直稳定使用 Y 的习惯，我建议将网上的 X 方案略作调整以适应您的 Y 架构...”
+5. 【强制输出化约束】：如果是生成草稿摘要，必须控制在 100 字以内，并且必须在内容末尾附上来源 URL。如果是生成标题，必须简短且高度贴合主干内容。
 """
         return system_prompt

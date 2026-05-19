@@ -3,6 +3,8 @@ import os
 import json
 import threading
 import sys
+import platform
+import shutil
 import time
 import glob
 import frontmatter
@@ -10,7 +12,48 @@ import re
 import concurrent.futures
 from datetime import datetime
 
-# 模块接入 (导入我们之前手搓的引擎部件)
+def get_vault_root():
+    # getattr(sys, 'frozen', False) 是 PyInstaller 打包后的专属标记
+    if getattr(sys, 'frozen', False):
+        # 【生产环境 (发版)】：定位到用户的 AppData 目录
+        if platform.system() == "Windows":
+            base_dir = os.environ.get("APPDATA", os.path.expanduser("~"))
+        else:
+            base_dir = os.path.expanduser("~/Library/Application Support")
+            
+        prod_vault_path = os.path.join(base_dir, "VaultOS", "vault")
+        
+        # 如果是用户第一次安装打开，执行“种子释放”
+        if not os.path.exists(prod_vault_path):
+            os.makedirs(os.path.dirname(prod_vault_path), exist_ok=True)
+            # sys._MEIPASS 是打包后的临时解压目录，里面藏着我们的干净种子
+            seed_path = os.path.join(sys._MEIPASS, "vault") 
+            if os.path.exists(seed_path):
+                print("🌱 [系统初始化] 正在向系统盘释放初始外脑种子...")
+                shutil.copytree(seed_path, prod_vault_path, dirs_exist_ok=True)
+        return prod_vault_path
+    else:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "vault")
+
+VAULT_ROOT = get_vault_root()
+print(f"📂 [外脑物理锚点] 核心资产底座: {VAULT_ROOT}")
+
+# 🛡️ 运行时路径嗅探器 (Audit Hook)
+def path_sniffer(event, args):
+    # 只要 Python 底层触发了文件打开动作
+    if event == "open":
+        file_path = args[0]
+        if isinstance(file_path, str):
+            # 命中规则 1：出现俄罗斯套娃
+            if "vault/vault" in file_path.replace("\\", "/"):
+                print(f"🚨 [系统探针] 抓获套娃路径: {file_path}")
+            # 命中规则 2：使用了相对路径的 vault/ (在生产环境绝对不允许)
+            elif not os.path.isabs(file_path) and file_path.replace("\\", "/").startswith("vault/"):
+                print(f"🚨 [系统探针] 抓获未包裹 VAULT_ROOT 的野狗路径: {file_path}")
+
+# 激活底层的监听！
+sys.addaudithook(path_sniffer)
+
 try:
     from habit_extractor import HabitExtractor
     from rag_assembler import RAGAssembler
@@ -28,10 +71,10 @@ class VaultOS_Terminal:
         print("⚙️  正在初始化 AI 算力...")
         self._boot_sequence() 
         # 1. 定义物理存储路径
-        self.chat_history_path = "vault/chat_history.json" 
-        self.blackbox_path = "vault/blackbox_raw.jsonl"
-        self.config_path = "vault/system_config.json"
-        os.makedirs("vault", exist_ok=True)
+        self.chat_history_path = os.path.join(VAULT_ROOT, "chat_history.json") 
+        self.blackbox_path = os.path.join(VAULT_ROOT, "blackbox_raw.jsonl")
+        self.config_path = os.path.join(VAULT_ROOT, "system_config.json")
+        os.makedirs(VAULT_ROOT, exist_ok=True)
         # 加载大模型配置并初始化万能客户端
         self.llm_config = self._load_config()
         self._init_llm_client()
@@ -278,7 +321,7 @@ class VaultOS_Terminal:
                 retrieved_context = ""
                 
             try:
-                with open("vault/cognitive_map.json", "r", encoding="utf-8") as f:
+                with open(os.path.join(VAULT_ROOT, "cognitive_map.json"), "r", encoding="utf-8") as f:
                     cog_map = json.load(f)
                 if cog_map:
                     cog_str = json.dumps(cog_map, ensure_ascii=False)
@@ -355,7 +398,7 @@ class VaultOS_Terminal:
             return "⚠️ 脑区链接断开，手术失败。"
     
     def _update_entity_file(self, entity_name, new_trait):
-        entity_dir = "vault/knowledge/entities"
+        entity_dir = os.path.join(VAULT_ROOT, "knowledge", "entities")
         os.makedirs(entity_dir, exist_ok=True)
         file_path = os.path.join(entity_dir, f"{entity_name}.md")
         if not os.path.exists(file_path):
@@ -408,12 +451,14 @@ class VaultOS_Terminal:
         return items
 
     def get_local_news_list(self):
-        os.makedirs("vault/knowledge/inbox", exist_ok=True)
-        return self._scan_md_folder("vault/knowledge/inbox/*.md")
+        inbox_dir = os.path.join(VAULT_ROOT, "knowledge", "inbox")
+        os.makedirs(inbox_dir, exist_ok=True)
+        return self._scan_md_folder(os.path.join(inbox_dir, "*.md"))
 
     def get_favorite_list(self):
-        os.makedirs("vault/knowledge/favorites", exist_ok=True)
-        return self._scan_md_folder("vault/knowledge/favorites/*.md")
+        fav_dir = os.path.join(VAULT_ROOT, "knowledge", "favorites")
+        os.makedirs(fav_dir, exist_ok=True)
+        return self._scan_md_folder(os.path.join(fav_dir, "*.md"))
     
     def get_note_content(self, file_path):
         try:

@@ -40,7 +40,7 @@ src-tauri/target/
 # =========================
 # 替换为你的“后端生成的资料文件夹”的实际名称
 # (例如：如果文件夹叫 output_data，就写 output_data/)
-vault/
+# vault/
 Briefing_Today.md
 chat_mode.py
 web_ui.py
@@ -80,3 +80,38 @@ Desktop.ini
 *.suo
 *.ntvs*
 *.njsproj
+# ========================================
+# Vault OS 动态沙盒与运行时数据排除规则
+# ========================================
+
+# 1. 忽略所有 SQLite 数据库和 ChromaDB 向量库
+vault/*.db
+vault/*.sqlite3
+vault/chroma/
+
+# 2. 忽略动态生成的记忆和日志
+vault/*.jsonl
+vault/chat_history.json
+vault/cognitive_map.json
+vault/core_profile.json
+vault/habits.json
+vault/pending_memory.json
+vault/.run_token
+vault/shadow/
+
+# 3. 忽略外部拉取的知识碎片，但保留文件夹结构
+vault/knowledge/inbox/*
+vault/knowledge/favorites/*
+vault/knowledge/entities/*
+!vault/knowledge/inbox/.gitkeep
+!vault/knowledge/favorites/.gitkeep
+!vault/knowledge/entities/.gitkeep
+
+# 4. 忽略插件运行时产生的媒体与记忆资产 (仅保留源码和 UI)
+vault/plugins/*/audio/*
+vault/plugins/*/covers/*
+vault/plugins/*/knowledge/*
+!vault/plugins/*/api.py
+!vault/plugins/*/manifest.json
+!vault/plugins/*/tools/
+!vault/plugins/*/ui/

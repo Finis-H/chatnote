@@ -1,11 +1,12 @@
 import os
 import json
+from main import VAULT_ROOT
 import time
 
 class HabitExtractor:    
     def __init__(self):
         # 定义碎片存放目录，不再维护旧版的 habits.json
-        self.fragments_dir = "vault/active_tasks"
+        self.fragments_dir = os.path.join(VAULT_ROOT, "active_tasks")
         os.makedirs(self.fragments_dir, exist_ok=True)
 
     def analyze_input(self, user_input: str, llm_caller, chat_history=None):

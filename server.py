@@ -9,11 +9,11 @@ import os
 import importlib.util
 import shutil
 import time
+
+from main import VaultOS_Terminal, VAULT_ROOT
 from sqlmodel import Session, select
 from db import engine, init_db
 from fastapi.staticfiles import StaticFiles
-# 引入管家大脑与核心总线
-from main import VaultOS_Terminal
 from core_bus import event_bus
 from agent_runner import spawn_agent_task
 
@@ -28,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"], 
 )
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PLUGINS_DIR = os.path.join(BASE_DIR, "vault", "plugins")
+PLUGINS_DIR = os.path.join(VAULT_ROOT, "plugins")
 os.makedirs(PLUGINS_DIR, exist_ok=True)
 
 @app.get("/plugins/{plugin_id}/ui/{file_name}")
@@ -45,7 +45,7 @@ async def serve_plugin_ui(plugin_id: str, file_name: str):
 # 核心防御
 SECURITY_TOKEN = secrets.token_hex(16)
 os.makedirs("vault", exist_ok=True)
-with open("vault/.run_token", "w", encoding="utf-8") as f:
+with open(os.path.join(VAULT_ROOT, ".run_token"), "w", encoding="utf-8") as f:
     f.write(SECURITY_TOKEN)
 
 print("="*60)
@@ -65,13 +65,13 @@ async def api_rag_ingest(request: Request):
             return {"status": "error", "message": "未授权的访问拒绝进入 RAG 存储区"}  
         # 核心防线：路径沙盒验证 (Path Sandbox)
         source_file = payload_data.get("source_file", "")
-        # 1. 防御路径穿越攻击 (防范诸如 ../../vault/knowledge/xxx.md 的恶意路径)
+        # 1. 防御路径穿越攻击 (防范诸如 ../knowledge/xxx.md 的恶意路径)
         safe_source = os.path.normpath(source_file)
         if ".." in safe_source:
             print(f"🚨 [安全拦截] 检测到恶意路径穿越攻击: {source_file}")
             return {"status": "error", "message": "非法路径！系统已拦截。"} 
-        # 2. 权限隔离：外来 HTTP 请求【只能】操作 vault/plugins/ 目录下的文件！
-        allowed_prefix = os.path.normpath("vault/plugins/")
+        # 2. 权限隔离：外来 HTTP 请求【只能】操作 plugins 目录下的文件！
+        allowed_prefix = os.path.normpath(PLUGINS_DIR)
         if not safe_source.startswith(allowed_prefix):
             print(f"🚨 [越权拦截] 第三方 Agent 试图篡改系统核心记忆: {safe_source}")
             return {"status": "error", "message": "越权操作：第三方插件仅允许操作自己的沙盒数据！"}
@@ -138,7 +138,8 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 
             elif cmd_type == "fetch_memory":
                 try:
-                    with open("vault/pending_memory.json", "r", encoding="utf-8") as f:
+                    pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
+                    with open(pending_path, "r", encoding="utf-8") as f:
                         await websocket.send_json({"type": "memory_data", "content": json.load(f).get("queue", [])})
                 except Exception:
                     await websocket.send_json({"type": "memory_data", "content": []})
@@ -210,7 +211,8 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                     await event_bus.publish({"type": "system_toast", "content": result})
                     # 手术完触发一次记忆刷新
                     try:
-                        with open("vault/pending_memory.json", "r", encoding="utf-8") as f:
+                        pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
+                        with open(pending_path, "r", encoding="utf-8") as f:
                             await event_bus.publish({"type": "memory_data", "content": json.load(f).get("queue", [])})
                     except Exception: pass
                 asyncio.create_task(run_surgery())
@@ -220,7 +222,8 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                     result = await asyncio.to_thread(vault_os.process_profile_import, request.get("content", ""))
                     await event_bus.publish({"type": "system_toast", "content": result})
                     try:
-                        with open("vault/pending_memory.json", "r", encoding="utf-8") as f:
+                        pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
+                        with open(pending_path, "r", encoding="utf-8") as f:
                             await event_bus.publish({"type": "memory_data", "content": json.load(f).get("queue", [])})
                     except Exception: pass
                 asyncio.create_task(run_import())

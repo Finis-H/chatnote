@@ -7,14 +7,20 @@ use std::fs;
 //窃密插件
 #[tauri::command]
 fn get_run_token() -> Result<String, String> {
-    // 极客容错：开发模式和打包后的运行路径不同，我们多找几个地方
-    let paths = [
-        "vault/.run_token", 
-        "../vault/.run_token",
-        "../../vault/.run_token"];
-    for path in paths.iter() {
+    // 1. 先尝试在开发环境的相对路径找
+    let dev_paths = ["vault/.run_token", "../vault/.run_token", "../../vault/.run_token"];
+    for path in dev_paths.iter() {
         if let Ok(content) = fs::read_to_string(path) {
-            return Ok(content.trim().to_string()); // 去掉空格和换行
+            return Ok(content.trim().to_string());
+        }
+    }
+    // 2. 如果相对路径没有，去生产环境的 AppData/Roaming 找！
+    if let Some(mut app_data) = dirs::data_dir() { // 需要在 Cargo.toml 添加 dirs = "5.0" 依赖
+        app_data.push("VaultOS");
+        app_data.push("vault");
+        app_data.push(".run_token");
+        if let Ok(content) = fs::read_to_string(&app_data) {
+            return Ok(content.trim().to_string());
         }
     }
     Err("未找到Token，请确认后端已点火！".to_string())

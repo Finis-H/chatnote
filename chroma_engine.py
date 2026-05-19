@@ -2,9 +2,11 @@ import os
 import json
 import chromadb
 import dashscope
-from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 
-CONFIG_PATH = "vault/system_config.json"
+from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
+from main import VAULT_ROOT
+
+CONFIG_PATH = os.path.join(VAULT_ROOT, "system_config.json")
 
 def load_embed_config():
     """从 Tauri 前端生成的配置文件中读取 Embedding 专用配置"""
@@ -46,8 +48,8 @@ class AliyunEmbeddingFunction(EmbeddingFunction):
             raise Exception(f"🚨 阿里云 API 调用失败: {resp.status_code} - {resp.message}")
 
 class VaultVectorDB:
-    def __init__(self, db_path="vault/knowledge/vector_store"):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = db_path or os.path.join(VAULT_ROOT, "knowledge", "vector_store")
         os.makedirs(self.db_path, exist_ok=True)
         self.client = chromadb.PersistentClient(path=self.db_path)
         self.aliyun_ef = AliyunEmbeddingFunction() 

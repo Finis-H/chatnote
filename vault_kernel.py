@@ -1,9 +1,10 @@
 import json
 import os
+from main import VAULT_ROOT
 
 class VaultKernel:
     def __init__(self):
-        self.core_path = "vault/core/digital_twin.json"
+        self.core_path = os.path.join(VAULT_ROOT, "core", "digital_twin.json")
         self.profile = self._load_profile()
 
     def _load_profile(self):

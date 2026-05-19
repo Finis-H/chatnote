@@ -1,16 +1,17 @@
 import os
 import json
+from main import VAULT_ROOT
 
 def init_vault():
     # 1. 定义物理目录结构
     directories = [
-        "vault/core",           # Layer 3: 核心基岩 (digital_twin.json)
-        "vault/entities",       # Layer 3: 外部实体画像
-        "vault/shadow",         # Layer 2: 观察沙盒
-        "vault/knowledge/inbox",# Layer 1: 原始输入/抓取
-        "vault/knowledge/archives", # 经过融合的知识
-        "vault/active_tasks",   # 任务断点快照
-        "vault/cache"           # Layer 1: 对话缓存 (TTL)
+        os.path.join(VAULT_ROOT, "core"),           # Layer 3: 核心基岩 (digital_twin.json)
+        os.path.join(VAULT_ROOT, "entities"),       # Layer 3: 外部实体画像
+        os.path.join(VAULT_ROOT, "shadow"),         # Layer 2: 观察沙盒
+        os.path.join(VAULT_ROOT, "knowledge/inbox"),# Layer 1: 原始输入/抓取
+        os.path.join(VAULT_ROOT, "knowledge/archives"), # 经过融合的知识
+        os.path.join(VAULT_ROOT, "active_tasks"),   # 任务断点快照
+        os.path.join(VAULT_ROOT, "cache")           # Layer 1: 对话缓存 (TTL)
     ]
 
     for folder in directories:
@@ -18,7 +19,7 @@ def init_vault():
         print(f"✅ 已就绪: {folder}")
 
     # 2. 初始化核心画像标准 (digital_twin.json)
-    digital_twin_path = "vault/core/digital_twin.json"
+    digital_twin_path = os.path.join(VAULT_ROOT, "core", "digital_twin.json")
     if not os.path.exists(digital_twin_path):
         initial_profile = {
             "version": "1.0",

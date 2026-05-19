@@ -1,0 +1,22 @@
+{
+  "type": "function",
+  "function": {
+    "name": "play_music_playlist",
+    "description": "调用音乐插件，根据情绪、歌手或流派生成临时歌单并自动播放。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "keywords": { "type": "string", "description": "搜索词" }
+      }
+    }
+  },
+  "execution": {
+    "type": "http",
+    "endpoint": "http://127.0.0.1:8000/api/plugins/music_agent/execute",
+    "method": "POST",
+    "payload_format": {
+      "func_name": "play_music_playlist",
+      "args": "{args}"
+    }
+  }
+}

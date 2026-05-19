@@ -1,16 +1,17 @@
 import os
 import glob
 import json
+from main import VAULT_ROOT
 import uuid
 from datetime import datetime, timedelta
 
 class PromotionGatekeeper:
     def __init__(self):
-        self.fragments_dir = "vault/active_tasks"
-        self.profile_path = "vault/core_profile.json"
-        self.pending_path = "vault/pending_memory.json"
-        self.blackbox_path = "vault/memory_blackbox.jsonl" # 黑盒溯源
-        self.cognitive_path = "vault/cognitive_map.json" # 认知图谱的物理路径
+        self.fragments_dir = os.path.join(VAULT_ROOT, "active_tasks")
+        self.profile_path = os.path.join(VAULT_ROOT, "core_profile.json")
+        self.pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
+        self.blackbox_path = os.path.join(VAULT_ROOT, "memory_blackbox.jsonl") # 黑盒溯源
+        self.cognitive_path = os.path.join(VAULT_ROOT, "cognitive_map.json") # 认知图谱的物理路径
         self._init_files()
 
     def _init_files(self):

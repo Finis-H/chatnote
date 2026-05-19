@@ -1,9 +1,10 @@
 import os
 import json
+from main import VAULT_ROOT
 
 class ToolRegistry:
-    def __init__(self, tools_dir="vault/tools"):
-        self.tools_dir = tools_dir
+    def __init__(self, tools_dir=None):
+        self.tools_dir = tools_dir or os.path.join(VAULT_ROOT, "tools")
         self.registered_names = set()
         self.system_warnings = []
         
@@ -33,7 +34,7 @@ class ToolRegistry:
                 "type": "function",
                 "function": {
                     "name": "search_local_knowledge",
-                    "description": "检索本地知识库与外脑物理记忆。核心触发法则：只要 Boss 询问的内容不是客观世界的公共常识（如'地球有多大'），而是涉及他【个人系统内部的专属资产】——包括但不限于他自己写的笔记、代码、历史对话，以及【任何已安装的第三方 Agent（如影音、健康、财务、日程等插件）自动生成并投喂的领域数据与解析】，你都必须且只能调用此工具！",
+                    "description": "本地高维向量数据库（RAG）唯一检索入口！核心触发法则：只要 Boss 询问的内容不是客观世界的公共常识（如'地球有多大'），而是涉及他【个人系统内部的专属资产】——包括但不限于他自己写的笔记、代码、历史对话，以及【任何已安装的第三方 Agent（如影音、健康、财务、日程等插件）自动生成并投喂的领域数据与解析】，你必须且只能调用此工具在向量空间中执行模糊检索！绝对禁止调用任何外部子进程或全量文件扫描脚本！",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -77,10 +78,10 @@ class ToolRegistry:
     def _load_external_tools(self):
         """物理扫描 tools 目录，加载第三方 MCP/Agent 契约并执行防撞校验"""
         os.makedirs(self.tools_dir, exist_ok=True)
-        # 1. 扫描公共工具目录 (vault/tools/*.json)
+        # 1. 扫描公共工具目录 (tools/*.json)
         self._scan_folder(self.tools_dir)
-        # 2. 扫描插件私有工具目录 (vault/plugins/*/tools/*.json)
-        plugins_root = "vault/plugins"
+        # 2. 扫描插件私有工具目录 (plugins/*/tools/*.json)
+        plugins_root = os.path.join(VAULT_ROOT, "plugins")
         if os.path.exists(plugins_root):
             for plugin_name in os.listdir(plugins_root):
                 plugin_tool_dir = os.path.join(plugins_root, plugin_name, "tools")
