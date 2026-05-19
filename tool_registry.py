@@ -33,7 +33,7 @@ class ToolRegistry:
                 "type": "function",
                 "function": {
                     "name": "search_local_knowledge",
-                    "description": "检索本地知识库。当 Boss 询问他自己的笔记、历史记忆、代码习惯、日程安排、财报记录或人际关系时，必须调用此工具。",
+                    "description": "检索本地知识库与外脑物理记忆。核心触发法则：只要 Boss 询问的内容不是客观世界的公共常识（如'地球有多大'），而是涉及他【个人系统内部的专属资产】——包括但不限于他自己写的笔记、代码、历史对话，以及【任何已安装的第三方 Agent（如影音、健康、财务、日程等插件）自动生成并投喂的领域数据与解析】，你都必须且只能调用此工具！",
                     "parameters": {
                         "type": "object",
                         "properties": {

@@ -58,12 +58,24 @@ vault_os = VaultOS_Terminal()
 
 @app.post("/api/rag/ingest")
 async def api_rag_ingest(request: Request):
-    # (此部分保持不变...)
     try:
         payload_data = await request.json()
         auth_header = request.headers.get("Authorization")
         if auth_header != f"Bearer {SECURITY_TOKEN}":
             return {"status": "error", "message": "未授权的访问拒绝进入 RAG 存储区"}  
+        # 核心防线：路径沙盒验证 (Path Sandbox)
+        source_file = payload_data.get("source_file", "")
+        # 1. 防御路径穿越攻击 (防范诸如 ../../vault/knowledge/xxx.md 的恶意路径)
+        safe_source = os.path.normpath(source_file)
+        if ".." in safe_source:
+            print(f"🚨 [安全拦截] 检测到恶意路径穿越攻击: {source_file}")
+            return {"status": "error", "message": "非法路径！系统已拦截。"} 
+        # 2. 权限隔离：外来 HTTP 请求【只能】操作 vault/plugins/ 目录下的文件！
+        allowed_prefix = os.path.normpath("vault/plugins/")
+        if not safe_source.startswith(allowed_prefix):
+            print(f"🚨 [越权拦截] 第三方 Agent 试图篡改系统核心记忆: {safe_source}")
+            return {"status": "error", "message": "越权操作：第三方插件仅允许操作自己的沙盒数据！"}
+            
         success = await asyncio.to_thread(vault_os.receive_knowledge_payload, payload_data)
         return {"status": "success"} if success else {"status": "error"}
     except Exception as e:
@@ -157,6 +169,22 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 
                 if os.path.exists(plugin_path):
                     try:
+                        # 0. 在物理销毁前，由主引擎接管并强制注销该插件的所有向量记忆！
+                        # 绝对安全：不经过 HTTP API，直接调用主系统的内存函数
+                        knowledge_dir = os.path.join(plugin_path, "knowledge")
+                        if os.path.exists(knowledge_dir):
+                            for md_file in os.listdir(knowledge_dir):
+                                if md_file.endswith(".md"):
+                                    filepath = os.path.join(knowledge_dir, md_file)
+                                    purge_payload = {
+                                        "command": "RAG_UPSERT",
+                                        "source_file": filepath,
+                                        "hash": "uninstall_purge",
+                                        "payload": [] # 空载荷触发彻底删除
+                                    }
+                                    vault_os.receive_knowledge_payload(purge_payload)
+                            print(f"🧹 [系统屠魔] 插件 [{safe_id}] 的所有孤儿向量记忆已被主系统强行注销！")
+
                         # 1. 尝试调用插件专属的自毁钩子 (Lifecycle Hook)
                         if os.path.exists(api_file):
                             import importlib.util
@@ -164,11 +192,10 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                             plugin_module = importlib.util.module_from_spec(spec)
                             spec.loader.exec_module(plugin_module)
                             
-                            # 如果插件提供了卸载钩子，把数据库引擎传给它让它自己清理
                             if hasattr(plugin_module, "uninstall_hook"):
                                 plugin_module.uninstall_hook(engine)
                         
-                        # 2. 主引擎执行最终的物理屠魔：连根拔起插件文件夹
+                        # 2. 主引擎执行最终的物理抹杀：连根拔起插件文件夹
                         shutil.rmtree(plugin_path) 
                         
                         await websocket.send_json({"type": "plugin_uninstalled_success", "plugin_id": safe_id})
