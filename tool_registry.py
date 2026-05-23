@@ -16,7 +16,7 @@ class ToolRegistry:
                     "name": "web_search",
                     # ✅ 方案 A 的核心：重写工具描述 (Description)
                     # 在这里给大模型下达最高指令，强迫它在调用搜索前先充当翻译官！
-                    "description": "这是一个强大的全球网络搜索引擎。【最高指令】：当检索全球前沿科技动态、AI大模型进展、外企新闻时，你 **必须** 将搜索词翻译为纯英文再传入！例如：不要传入 'openai大模型最新版本'，必须传入 'OpenAI latest model release'。",
+                    "description": "这是一个强大的全球网络搜索引擎。【最高指令】：1. 当检索全球前沿科技动态、AI大模型进展、外企新闻时，你必须将搜索词翻译为纯英文再传入！2. 当检索【天气、股市、新闻、比赛结果】等对时间极度敏感的实时信息时，你 **必须** 将系统的当前日期（年月日）直接强制拼接在搜索词中！例如：绝对不能传入 '今天上海天气'，必须传入 '上海天气 2026年5月23日'。",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -51,7 +51,7 @@ class ToolRegistry:
                 "type": "function",
                 "function": {
                     "name": "control_ui_layout",
-                    "description": "控制 Vault OS 前端界面的物理空间与布局。当 Boss 想要听歌、看图表，或者明确需要【沉浸式体验】时，你【只需且必须只】调用此单一工具！绝对禁止再组合调用 web_search 搜索推荐！",
+                    "description": "纯粹的 UI 控制器。当 Boss 明确要求“收起面板”、“关闭窗口”或“全屏放大面板”时调用此工具。⚠️警告：如果你已经调用了具体的业务插件（如 play_music_playlist 音乐播放），业务插件会自动弹出 UI，此时【绝对禁止】再调用本工具，否则会导致界面冲突！",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -59,19 +59,24 @@ class ToolRegistry:
                                 "type": "string",
                                 "description": "要控制的目标面板名称，例如 'music_agent', 'invest_agent'"
                             },
+                            "target_component": {
+                                "type": "string",
+                                "description": "目标面板的主 Vue 组件名，例如音乐插件固定填 'MusicAgentPanel'"
+                            },
                             "state": {
                                 "type": "string",
                                 "enum": ["mini", "immersive", "closed"],
                                 "description": "面板的目标形态：mini(侧边栏静默陪伴), immersive(全屏沉浸覆盖), closed(关闭)"
                             }
                         },
-                        "required": ["target_panel", "state"]
+                        "required": ["target_panel", "target_component", "state"]
                     }
                 }
             }
         ]
         self.registered_names.add("web_search")
         self.registered_names.add("search_local_knowledge")
+        self.registered_names.add("control_ui_layout")
         # 2. 动态加载外部插件生态 (VPM 雏形)
         self._load_external_tools()
 
@@ -84,7 +89,16 @@ class ToolRegistry:
         plugins_root = os.path.join(VAULT_ROOT, "plugins")
         if os.path.exists(plugins_root):
             for plugin_name in os.listdir(plugins_root):
-                plugin_tool_dir = os.path.join(plugins_root, plugin_name, "tools")
+                plugin_path = os.path.join(plugins_root, plugin_name)
+                if not os.path.isdir(plugin_path): continue
+                
+                # 直接读取并加载插件的“身份证” manifest.json
+                manifest_file = os.path.join(plugin_path, "manifest.json")
+                if os.path.exists(manifest_file):
+                    self._parse_and_register_tool(manifest_file)
+                
+                # 兼容性保留：扫描额外的 tools 目录 (以防后续有复杂的插件拆分多个 json)
+                plugin_tool_dir = os.path.join(plugin_path, "tools")
                 if os.path.exists(plugin_tool_dir):
                     self._scan_folder(plugin_tool_dir)
         
@@ -93,47 +107,45 @@ class ToolRegistry:
             return
         for filename in os.listdir(folder_path):
             if not filename.endswith(".json"): continue
-            
             filepath = os.path.join(folder_path, filename)
-            with open(filepath, 'r', encoding='utf-8') as f:
-                try:
-                    tool_manifest = json.load(f)
+            self._parse_and_register_tool(filepath)
+   
+    def _parse_and_register_tool(self, filepath):
+        """ 独立解析器：从任意 JSON 文件中提取符合大模型标准的 Tool"""
+        with open(filepath, 'r', encoding='utf-8') as f:
+            try:
+                tool_manifest = json.load(f)
+                
+                # 容错：处理被包在数组里的 JSON
+                if isinstance(tool_manifest, dict):
+                    manifests = [tool_manifest]
+                elif isinstance(tool_manifest, list):
+                    manifests = tool_manifest
+                else:
+                    return
                     
-                    # 容错：处理被包在数组里的 JSON
-                    if isinstance(tool_manifest, dict):
-                        manifests = [tool_manifest]
-                    elif isinstance(tool_manifest, list):
-                        manifests = tool_manifest
-                    else:
-                        print(f"⚠️ [跳过] {filename} 格式不正确（需为字典或列表）。")
+                for manifest in manifests:
+                    # 必须有 function 且包含 name，否则判定为普通配置文件（不喂给大模型）
+                    if "function" not in manifest or "name" not in manifest["function"]:
+                        continue       
+                    
+                    name = manifest["function"]["name"]
+                    
+                    if name in self.registered_names:
+                        print(f"⚠️ [警告] 发现冲突工具: {name} (文件: {os.path.basename(filepath)})。已强制隔离。")
+                        self.system_warnings.append(f"工具库加载异常：发现冲突插件 '{name}'。")
                         continue
                         
-                    for tool_manifest in manifests:
-                        # 按照 OpenAI 原生 Tool Calling 标准提取 name
-                        if "function" not in tool_manifest or "name" not in tool_manifest["function"]:
-                            print(f"⚠️ [跳过] {filename} 中的某项不符合原生 Tool Schema 标准。")
-                            continue       
-                        name = tool_manifest["function"]["name"]
-                        
-                        # 这段防撞击拦截必须缩进到 for 循环内部！
-                        if name in self.registered_names:
-                            print(f"⚠️ [警告] 发现冲突工具: {name} (文件: {filename})。已强制隔离。")
-                            self.system_warnings.append(f"工具库加载异常：发现冲突插件 '{name}'。")
-                            continue
-                            
-                        # 确保最外层有 "type": "function" 标识
-                        if "type" not in tool_manifest:
-                            tool_manifest["type"] = "function"
+                    if "type" not in manifest:
+                        manifest["type"] = "function"
 
-                        self.tools.append(tool_manifest)
-                        self.registered_names.add(name)
-                        print(f"🔌 [VPM 挂载] 外部插件契约已就绪: {name}")
+                    self.tools.append(manifest)
+                    self.registered_names.add(name)
+                    print(f" [VPM 挂载] 外部插件契约已就绪: {name}")
 
-                except json.JSONDecodeError as e:
-                    # 单独捕获 JSON 语法错误，方便排查格式问题
-                    print(f"🚨 契约解析失败 {filename}: JSON 格式错误 - {e}")    
-                except Exception as e:
-                    print(f"🚨 契约损坏 {filename}: {e}")
+            except Exception as e:
+                # 忽略普通的 json 报错（比如解析到 system_config 这种纯数据文件）
+                pass
 
     def get_tools(self):
         """直接将标准的 Tools 数组暴露给大模型接口"""

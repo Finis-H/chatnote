@@ -1,7 +1,9 @@
 <template>
   <div class="music-panel" :class="{ 'immersive': isImmersive, 'mini': !isImmersive }">
     
-    <audio ref="audioPlayer" :src="currentTrack?.url" 
+    <audio ref="audioPlayer"  
+           crossorigin="anonymous"
+           :src="currentTrack?.url ? getFullUrl(currentTrack.url) : undefined" 
            @timeupdate="onTimeUpdate" 
            @ended="onTrackEnded"
            @playing="onPlaying"
@@ -9,7 +11,7 @@
 
     <div v-if="!isImmersive" class="dock-icon-mode" title="点击展开音乐沉浸控制台" @click="isImmersive = true">
       <div class="album-art dock-art" :class="{ rotating: isPlaying }">
-        <img :src="currentTrack?.cover_url || defaultCover" alt="Cover" />
+        <img :src="currentTrack?.cover_url ? getFullUrl(currentTrack.cover_url) : defaultCover" alt="Cover" />
       </div>
     </div>
 
@@ -25,7 +27,7 @@
 
         <div class="album-art-wrapper">
           <div class="album-art" :class="{ rotating: isPlaying }">
-            <img :src="currentTrack?.cover_url || defaultCover" alt="Cover" />
+            <img :src="currentTrack?.cover_url ? getFullUrl(currentTrack.cover_url) : defaultCover" alt="Cover" />
           </div>
         </div>
         
@@ -81,8 +83,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { activeAgentComponent, isImmersive } from 'vault:useNeuroLink';
+import { SystemConfig } from 'vault:useNeuroLink';
 
 const props = defineProps({ isImmersive: Boolean });
 const defaultCover = 'https://api.dicebear.com/7.x/shapes/svg?seed=vaultOS';
@@ -93,32 +96,43 @@ const currentTime = ref(0);
 const duration = ref(0);
 const volume = ref(0.7);
 const sysMsg = ref('');
-
-// 🚀 核心调度变量
+const getFullUrl = (url) => {
+  if (!url) return undefined;
+  if (url.startsWith('http')) return url;
+  return SystemConfig.API_BASE + url;
+};
+// 核心调度变量
 const playlist = ref([]);
 const currentIndex = ref(0);
 const currentTrack = ref(null);
 const loopMode = ref('list'); // 'list' 列表循环 | 'single' 单曲循环
-let watchdogTimer = null; // 5秒探测狗
+let watchdogTimer = null; // 15秒探测狗
 
 // ================= 核心播放逻辑 =================
 const toggleLoopMode = () => { loopMode.value = loopMode.value === 'list' ? 'single' : 'list'; };
 
-const attemptPlay = () => {
+const attemptPlay = async () => {
   if (!audioPlayer.value || !currentTrack.value) return;
+  
+  await nextTick(); 
+  audioPlayer.value.load();
   sysMsg.value = '缓冲中...';
   
-  // 🐶 放出 5 秒探测狗
   clearTimeout(watchdogTimer);
   watchdogTimer = setTimeout(() => {
     sysMsg.value = `🚨 [${currentTrack.value.title}] 链接失效，正在执行自动跳过与标记...`;
     markTrackDead(currentTrack.value.url);
-    playNext(true); // 强制切下一首
-  }, 5000);
+    playNext(true); 
+  }, 15000);
 
   audioPlayer.value.play().catch(e => {
-    console.error("音频阻断:", e);
-    // 发生物理报错，直接唤醒探测狗执行跳过
+    console.warn("🔊 音频播放指令异常:", e);
+    // 核心保命机制：如果是浏览器拦截了自动播放 (NotAllowedError)，立刻取消 15 秒死刑判决！
+    if (e.name === 'NotAllowedError') {
+      clearTimeout(watchdogTimer); // 勒死探测狗！
+      sysMsg.value = "⏸️ 浏览器拦截了自动播放，请手动点击播放按钮";
+      isPlaying.value = false;
+    }
   });
 };
 
@@ -132,7 +146,7 @@ const onPlaying = () => {
 // 探测狗触发：向后端 API 提交失效标记
 const markTrackDead = async (deadUrl) => {
   try {
-    await fetch('http://127.0.0.1:8000/api/plugins/music_agent/mark_dead', {
+    await fetch(`${SystemConfig.API_BASE}/api/plugins/music_agent/mark_dead`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: deadUrl })
@@ -185,23 +199,37 @@ const playPrev = () => {
 const onTrackEnded = () => { playNext(false); };
 
 const onAudioError = () => {
-  // 如果触发了底层网络错误，立刻跳过，不等 5 秒
-  if(isPlaying.value || currentTrack.value) {
+  // 如果当前没歌，或者根本没有加载 src，直接无视
+  if (!currentTrack.value || !audioPlayer.value?.src || audioPlayer.value.src.endsWith('undefined')) {
+    return;
+  }
+
+  // 核心修复 2：读取原生 DOM 的 MediaError 对象
+  const err = audioPlayer.value.error;
+  if (err && err.code === 1) {
+    return; 
+  }
+
+  if (isPlaying.value || currentTrack.value) {
     clearTimeout(watchdogTimer);
-    sysMsg.value = `🚨 [${currentTrack.value.title}] 资源访问被拒，自动跳过...`;
+    sysMsg.value = `🚨 资源加载失败 (Code: ${err ? err.code : '未知'})，自动跳过...`;
     markTrackDead(currentTrack.value.url);
     playNext(true);
   }
 };
-
+let lastPlaylistStr = "";
 // ================= 事件接收与生命周期 =================
 onMounted(() => {
   // 监听来自主程序的 "隔空投送" 歌单指令
   window.addEventListener('vpm_ws_music_agent', (e) => {
     const payload = e.detail;
     if (payload.type === 'play_playlist') {
+      const currentStr = JSON.stringify(payload.playlist);
+      if (currentStr === lastPlaylistStr) return; 
+      lastPlaylistStr = currentStr;
+      setTimeout(() => { lastPlaylistStr = ""; }, 4000);
+
       const newPlaylist = payload.playlist;
-      
       if (newPlaylist && newPlaylist.length > 0) {
         playlist.value = newPlaylist;
         currentIndex.value = 0;

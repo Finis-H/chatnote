@@ -1,6 +1,7 @@
 import requests
 import random
 import json
+import sys
 import os
 import time
 import shutil
@@ -8,7 +9,7 @@ import zipfile
 
 from core_bus import event_bus
 from openai import OpenAI
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Request, Response
 from fastapi.responses import FileResponse
 from sqlmodel import SQLModel, Field, Session, select
 from typing import Optional, List
@@ -25,10 +26,9 @@ class MusicTrack(SQLModel, table=True):
     lyrics: str = Field(default="", max_length=1000) 
     analysis: str = Field(default="", max_length=300) 
 
+CURRENT_DIR = os.path.join(VAULT_ROOT, "plugins", "music_agent")
 router = APIRouter()
 engine = None
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-VAULT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 COVERS_DIR = os.path.join(CURRENT_DIR, "covers")
 AUDIO_DIR = os.path.join(CURRENT_DIR, "audio")
 KNOWLEDGE_DIR = os.path.join(CURRENT_DIR, "knowledge")
@@ -41,14 +41,38 @@ def init_plugin(app_engine):
     os.makedirs(COVERS_DIR, exist_ok=True)
     os.makedirs(AUDIO_DIR, exist_ok=True)
     os.makedirs(KNOWLEDGE_DIR, exist_ok=True)
-    print("🎵 [Music Agent] V2 数据库与本地图床已就绪！")
+    print(" [Music Agent] V2 数据库与本地图床已就绪！")
 # 暴露本地音频的串流路由
 @router.get("/audio/{filename}")
-async def get_audio(filename: str):
+async def get_audio(request: Request, filename: str):
     file_path = os.path.join(AUDIO_DIR, filename)
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    raise HTTPException(status_code=404, detail="Audio not found")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Audio not found")
+
+    file_size = os.path.getsize(file_path)
+    range_header = request.headers.get("Range")
+
+    # 如果 Chromium 带着切片请求头来，我们必须按规矩返回 206 切片！
+    if range_header:
+        byte_range = range_header.replace("bytes=", "").split("-")
+        start = int(byte_range[0])
+        end = int(byte_range[1]) if byte_range[1] else file_size - 1
+        chunk_size = end - start + 1
+        
+        with open(file_path, "rb") as f:
+            f.seek(start)
+            data = f.read(chunk_size)
+            
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(chunk_size),
+            "Content-Type": "audio/mpeg",
+        }
+        return Response(content=data, status_code=206, headers=headers)
+    else:
+        # 如果是普通请求，正常返回
+        return FileResponse(file_path, media_type="audio/mpeg")
 # 插件自带图床路由！
 # 把图片存进插件目录，并通过这个接口暴露给前端，完美继承 server.py 的 CORS 跨域放行机制！
 @router.get("/covers/{filename}")
@@ -91,9 +115,7 @@ async def add_music_track(
     with open(audio_save_path, "wb") as buffer:
         shutil.copyfileobj(audio_file.file, buffer)
         
-    # 生成绝对唯一的内部 API 访问路径，彻底终结主键冲突！
-    generated_url = f"http://127.0.0.1:8000/api/plugins/music_agent/audio/{safe_audio_name}"
-
+    generated_url = f"/api/plugins/music_agent/audio/{safe_audio_name}"
     # --- 2. 物理保存封面图片 ---
     cover_url_db = ""
     if cover_file and cover_file.filename:
@@ -102,7 +124,7 @@ async def add_music_track(
         cover_save_path = os.path.join(COVERS_DIR, safe_cover_name)
         with open(cover_save_path, "wb") as buffer:
             shutil.copyfileobj(cover_file.file, buffer)
-        cover_url_db = f"http://127.0.0.1:8000/api/plugins/music_agent/covers/{safe_cover_name}"
+        cover_url_db = f"/api/plugins/music_agent/covers/{safe_cover_name}"
 
     try:
         # --- 3. 写入 SQLite ---
@@ -175,7 +197,7 @@ async def delete_music_track(url: str):
                 print(f"🗑️ [碎纸机] 封面已销毁: {cover_filename}")
 
         # --- 2. 碎纸机：销毁本地音频文件 ---
-        if track.url and track.url.startswith("http"):
+        if track.url:
             audio_filename = track.url.split("/")[-1]
             audio_path = os.path.join(AUDIO_DIR, audio_filename)
             if os.path.exists(audio_path):
@@ -202,6 +224,12 @@ async def delete_music_track(url: str):
                             if os.path.exists(token_path):
                                 with open(token_path, "r", encoding="utf-8") as tf:
                                     security_token = tf.read().strip()
+                            actual_port = "8000"
+                            port_path = os.path.join(VAULT_ROOT, ".server_port")
+                            if os.path.exists(port_path):
+                                with open(port_path, "r", encoding="utf-8") as pf:
+                                    actual_port = pf.read().strip()
+                            rag_url = f"http://127.0.0.1:{actual_port}/api/rag/ingest"
                                     
                             # 【精妙设计】：通过发送一个空的 payload 数组，利用主引擎逻辑触发彻底注销
                             rag_payload = {
@@ -211,12 +239,20 @@ async def delete_music_track(url: str):
                                 "payload": [] 
                             }
                             headers = {"Authorization": f"Bearer {security_token}"}
+ 
+                            def _notify_rag():
+                                try:
+                                    resp = requests.post(rag_url, json=rag_payload, headers=headers, timeout=10)
+                                    if resp.status_code == 200:
+                                        print("✅ [记忆切除] 已成功通知主系统 ChromaDB 擦除相关的多维向量！")
+                                except Exception as rag_e:
+                                    print(f"🚨 [记忆切除] 向量擦除通知发送失败: {rag_e}")
                             
-                            resp = requests.post("http://127.0.0.1:8000/api/rag/ingest", json=rag_payload, headers=headers, timeout=5)
-                            if resp.status_code == 200:
-                                print("✅ [记忆切除] 已成功通知主系统 ChromaDB 擦除相关的多维向量！")
-                            else:
-                                print(f"⚠️ [记忆切除] 主系统拒绝擦除: {resp.text}")
+                            import threading
+                            threading.Thread(target=_notify_rag).start()
+                            print("✅ [记忆切除] 已向主系统发送后台擦除指令，前端物理秒删！")
+                            
+                            break
                         except Exception as rag_e:
                             print(f"🚨 [记忆切除] 向量擦除通知发送失败: {rag_e}")
                             
@@ -340,11 +376,18 @@ def agent_analyze_lyrics(url: str, lyrics: str, md_file_path: str):
         if os.path.exists(token_path):
             with open(token_path, "r", encoding="utf-8") as tf:
                 security_token = tf.read().strip()
+        actual_port = "8000"
+        port_path = os.path.join(VAULT_ROOT, ".server_port")
+        if os.path.exists(port_path):
+            with open(port_path, "r", encoding="utf-8") as pf:
+                actual_port = pf.read().strip()
+                
+        rag_url = f"http://127.0.0.1:{actual_port}/api/rag/ingest"
                 
         # 通过 HTTP 向主系统的 RAG 神经总线发起注射！
         headers = {"Authorization": f"Bearer {security_token}"}
         try:
-            resp = requests.post("http://127.0.0.1:8000/api/rag/ingest", json=rag_payload, headers=headers, timeout=10)
+            resp = requests.post(rag_url, json=rag_payload, headers=headers, timeout=10)
             if resp.status_code == 200:
                 print("✅ [Music Agent] 记忆碎片已成功上交系统 RAG 向量库！管家现在可以搜到它了！")
             else:
@@ -392,7 +435,7 @@ async def update_music_track(
                 with open(save_path, "wb") as buffer:
                     import shutil
                     shutil.copyfileobj(cover_file.file, buffer)
-                track.cover_url = f"http://127.0.0.1:8000/api/plugins/music_agent/covers/{safe_name}"
+                track.cover_url = f"/api/plugins/music_agent/covers/{safe_name}"
 
             session.add(track)
             session.commit()
@@ -403,38 +446,41 @@ async def update_music_track(
     
 @router.post("/execute")
 async def music_plugin_executor(payload: dict):
-    """
-    [VPM 独立执行网关]
-    主引擎 ToolExecutor 转发过来的指令将在这里进行最终分发。
-    """
     func_name = payload.get("func_name")
     args = payload.get("args", {})
 
     if func_name == "play_music_playlist":
         keywords = args.get("keywords", "")
-        # --- 原本在主引擎里的逻辑现在搬家到了这里 ---
         with Session(engine) as session:
-            # 1. 查库
             all_tracks = session.exec(select(MusicTrack)).all()
             valid_tracks = [t for t in all_tracks if "【失效】" not in t.title]
             
             if not valid_tracks:
                 return "本地曲库为空，请Boss先去管理后台录入资产。"
 
-            # 2. 模糊匹配
-            matched = []
-            k = keywords.lower()
-            for t in valid_tracks:
-                corpus = f"{t.title} {t.artist} {t.tags_raw} {t.analysis} {t.lyrics}".lower()
-                if k in corpus: matched.append(t)
+            selection = []
             
-            # 3. 随机抽取并发布事件
-            selection = random.sample(matched or valid_tracks, min(len(matched or valid_tracks), 10))
+            # 诚实裁决逻辑：如果有明确关键词，找不到就必须报错！
+            if keywords and keywords.strip():
+                k = keywords.lower()
+                matched = []
+                for t in valid_tracks:
+                    corpus = f"{t.title} {t.artist} {t.tags_raw} {t.analysis} {t.lyrics}".lower()
+                    if k in corpus: matched.append(t)
+                
+                # 核心拦截：找不到绝不顶包，如实上报！
+                if not matched:
+                    return f"【系统红色警报：禁止产生幻觉！】本地数字资产库中没有任何与 '{keywords}' 相关的曲目。请立即向 Boss 汇报本地缺失此类型歌曲，并立即结束回答！绝对、永远禁止擅自编造歌曲名或推荐互联网上的曲目！"
+                
+                selection = random.sample(matched, min(len(matched), 10))
+                
+            else:
+                # 只有当 Boss 没提具体要求（比如只说了“随便放首歌”），才允许全库盲盒抽取
+                selection = random.sample(valid_tracks, min(len(valid_tracks), 10))
             
-            # 将曲目对象转为字典格式发送
+            # --- 下面发布事件的代码保持不变 ---
             playlist_data = [t.model_dump() if hasattr(t, "model_dump") else t.dict() for t in selection]
             
-            # 关键：插件直接利用总线向前端发号施令
             await event_bus.publish({
                 "type": "play_playlist",
                 "target_panel": "music_agent",
@@ -446,7 +492,6 @@ async def music_plugin_executor(payload: dict):
             return f"已为你生成临时歌单：{songs_str}，并在右侧面板开始打碟。"
 
     return f"Music Agent 暂不支持指令: {func_name}"
-
 @router.get("/export")
 async def export_music_assets():
     """

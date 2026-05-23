@@ -58,7 +58,7 @@ class VaultVectorDB:
             name="vault_core_v3", # 建议改个名字，和之前纯本地的库区分开
             embedding_function=self.aliyun_ef
         )
-        print(f"💽 ChromaDB 已就绪 | 物理路径: {self.db_path}")
+        print(f" ChromaDB 已就绪 | 物理路径: {self.db_path}")
 
     def delete_by_source(self, source_path):
         """精准爆破：根据文件路径抹除 ChromaDB 中的所有相关历史切片"""

@@ -1,6 +1,27 @@
 import { ref, computed, shallowRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { loadVpmComponent } from '../utils/vpmLoader';
+// 🚀 引入注册器，并且彻底删除了原来造成死循环的 import * as selfContext
+import { loadVpmComponent, registerVpmContext } from '../utils/vpmLoader';
+
+export const SystemConfig = {
+    SERVER_PORT: 8000,
+    API_BASE: "http://127.0.0.1:8000",
+    WS_BASE: "ws://127.0.0.1:8000",
+    TOKEN: ""
+};
+
+export async function initSystemEnv() {
+    try {
+        SystemConfig.TOKEN = await invoke('get_run_token');
+        const port = await invoke('get_server_port');
+        SystemConfig.SERVER_PORT = port;
+        SystemConfig.API_BASE = `http://127.0.0.1:${port}`;
+        SystemConfig.WS_BASE = `ws://127.0.0.1:${port}`;
+        console.log("🟢 [系统环境寻址完成]:", SystemConfig);
+    } catch (error) {
+        console.error("🔴 [环境寻址失败，使用备用降级模式]:", error);
+    }
+}
 
 // === 全局单例状态 (State) ===
 export const activeView = ref('chat');
@@ -23,7 +44,6 @@ export const deleteModal = ref({ show: false, note: null });
 export const isImporting = ref(false);
 export const importFile = ref(null);
 
-// === 组合式检索与过滤状态 ===
 export const searchQuery = ref('');
 export const searchMode = ref('all');
 export const memoryFilter = ref('all');
@@ -35,7 +55,6 @@ let isAppDestroyed = false;
 let toastTimeout = null;
 let shakeTimeout = null;
 
-// === 核心通信业务 ===
 export function useNeuroLink() {
 
   function showToast(msg) {
@@ -50,10 +69,30 @@ export function useNeuroLink() {
     shakeTimeout = setTimeout(() => { inputError.value = false; }, 500);
   }
 
+  function sendWsCommand(payload) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    }
+  }
+
+  // 🚀 核心架构解法：在系统主流程中，单向注入所有依赖环境！
+  // 完美提供了真正的函数 (showToast) 和所需配置，不再造成 TypeError 和 undefined
+  registerVpmContext({
+    SystemConfig, sysConfig, activeView, previousView, newsList, favoritesList,
+    pluginsList, globalMessages, noteThreads, currentNote, pendingMemory,
+    isThinking, userInput, systemToast, inputError, isImmersive,
+    activeAgentComponent, deleteModal, isImporting, importFile,
+    searchQuery, searchMode, memoryFilter, pendingCount,
+    showToast, sendWsCommand, switchView, openNote, confirmDelete, saveSystemConfig, confirmImport
+  });
+
   async function connectWebSocket() {
     try {
+      const port = await invoke('get_server_port');
+      SystemConfig.API_BASE = `http://127.0.0.1:${port}`;
+      SystemConfig.WS_BASE = `ws://127.0.0.1:${port}`;
       const autoToken = await invoke('get_run_token');
-      ws = new WebSocket(`ws://127.0.0.1:8000/ws/${autoToken}`);
+      ws = new WebSocket(`${SystemConfig.WS_BASE}/ws/${SystemConfig.TOKEN}`);
       
       ws.onopen = () => {
         console.log("🟢 [Vault OS] 神经链路已接通！");
@@ -119,6 +158,7 @@ export function useNeuroLink() {
         }
         else if (data.type === 'memory_data') pendingMemory.value = data.content;
         else if (data.type === 'system_toast') showToast("🩺 [管家汇报] " + data.content);
+        
         else if (data.type === 'ui_command') {
           console.log(`🪄 收到中枢 UI 指令：${data.target_panel} -> ${data.state}`);
           if (data.state === 'closed') {
@@ -126,28 +166,31 @@ export function useNeuroLink() {
             return;
           }
           if (!data.target_component) {
-              console.error(`🚨 [VPM 协议错误] 缺少 target_component，无法加载 UI`);
+              console.error(` [VPM 协议错误] 缺少 target_component，无法加载 UI`);
               return;
           }
+          // 🚀 恢复经典调用：仅需 2 个参数，URL组装和上下文全部由底层代理
           activeAgentComponent.value = loadVpmComponent(data.target_panel, data.target_component);
-          isImmersive.value = (data.state === 'immersive');
+          isImmersive.value = (data.state === 'immersive' || data.state === undefined);
         }
-        // 【VPM 泛用型盲传网关】(主程序通用逻辑，永不包含具体业务词汇)
+        
         else if (data.target_panel) {
-            // 1. 无脑唤起目标插件面板
             if (!data.target_component) {
-                console.error(`🚨 [VPM 协议错误] 插件数据包缺少 target_component，无法渲染 UI`);
+                console.error(` [VPM 协议错误] 插件数据包缺少 target_component，无法渲染 UI`);
                 return;
             }
+            
+            // 🚀 恢复经典调用
             activeAgentComponent.value = loadVpmComponent(data.target_panel, data.target_component);
-            isImmersive.value = true;
-            // 2. 将数据包打包进该插件的专属频段 (例如：vpm_ws_music_agent) 并广播
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent(`vpm_ws_${data.target_panel}`, { 
-                detail: data 
-              }));
-            }, 300); // 预留 300ms 挂载时间
-            return; 
+            isImmersive.value = (data.state === 'immersive' || data.state === undefined);
+            
+            const eventName = `vpm_ws_${data.target_panel}`;
+            [300, 800, 1500, 3000].forEach(delay => {
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent(eventName, { detail: data }));
+              }, delay);
+            });
+            return;
         }
       };
       
@@ -165,12 +208,6 @@ export function useNeuroLink() {
   function destroyLink() {
     isAppDestroyed = true;
     if (ws) ws.close();
-  }
-
-  function sendWsCommand(payload) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(payload));
-    }
   }
 
   function sendChatCommand() {

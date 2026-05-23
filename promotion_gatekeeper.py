@@ -45,61 +45,69 @@ class PromotionGatekeeper:
             return []
         prompt = f"""
         你是 Vault OS 的潜意识记忆仲裁专家。
-        【Type 1 物理基岩】：{json.dumps(current_profile, ensure_ascii=False)}
+        【Type 1 物理基岩（关于 Boss 自身）】：{json.dumps(current_profile, ensure_ascii=False)}
         【Type 2 认知图谱】：{json.dumps(current_cognitive, ensure_ascii=False)}
 
-        【最新提取的记忆碎片（含用户原话证据）】：
+        【最新提取的记忆碎片】：
         {json.dumps(new_traits, ensure_ascii=False)}
 
-        【绝对裁决法则】（仔细阅读）：
-        1. 识别实体（他人）：主语是用户以外的人，必须输出 {{"type": "ENTITY_UPDATE", ...}}
-        2. 物理界碑（Type 1）：关于用户的客观事实、生活偏好（例如“住在广州”、“讨厌香菜”），输出 NEW 或 CONFLICT。
-        3. 认知流形（Type 2）：如果碎片反映了用户在某项【技术、知识、业务】上的【掌握程度、痛点、里程碑】（例如“今天搞懂了Tauri”、“看不懂财报”）。必须输出 COGNITIVE_UPDATE！
-
-        【COGNITIVE_UPDATE 强制输出格式】：
-        {{
-            "type": "COGNITIVE_UPDATE",
-            "domain": "提取出的领域名（如：Tauri, Python, 股票投资）",
-            "new_cognition": {{
-                "exposure_time": "如果基岩里没有该领域，写今天的日期；如果有，保持原样",
-                "milestones_achieved": ["他已经做成了什么（结合旧图谱合并）"],
-                "current_bottlenecks": ["他现在的痛点和卡点"],
-                "mental_model": "他的理解视角（如：把 Rust 当黑盒）",
-                "actionable_insight": "给大模型的建议（如：必须多用前端概念解释）"
-            }}
-        }}
+        【身份公理与绝对裁决法则】：
+        1. 【自我统一性】：创造者(Boss)、“我”、“用户”、以及在基岩中记录的创造者真实姓名（如张三），在物理层面上是绝对的【同一个人】！
+        2. 【核心基岩区（Boss本人情报）】：如果碎片描述的是 Boss 本人（无论 entity 字段写的是 Boss、我、用户还是真名）：
+           - 🚨 物理隔离红线：绝对禁止使用 ENTITY_UPDATE 为创造者建立他人档案！
+           - 若是全新情报，输出：{{"type": "NEW", "category": "分类名(如 facts/interests)", "new_trait": "特征描述"}}
+           - 若与基岩旧情报矛盾，输出：{{"type": "CONFLICT", "category": "分类名", "old_trait": "旧特征", "new_trait": "新特征描述"}}
+        3. 【他人情报区（独立实体档案）】：只有当碎片明确描述的是【真正的外部其他人】（如母亲、朋友李四）：
+           - 🚨 物理隔离红线：绝对禁止将其写入 Boss 的基岩！绝对禁止输出 NEW 或 CONFLICT！
+           - 必须且只能输出：{{"type": "ENTITY_UPDATE", "entity": "他人标准称呼", "new_trait": "客观特征"}}
         """
         try:
-            print("⚖️  [仲裁官] 正在呼叫大模型进行时空与认知判决...")
+            print("  [仲裁官] 正在呼叫大模型进行判决...")
             response_data = llm_caller(prompt)
             if isinstance(response_data, dict): response_data = [response_data]
             results = []
             for item in response_data:
                 t = item.get("type")
-                # 根据不同的类型，严格校验它该有的器官是否完整
                 is_valid = False
+                
+                # 全局字段清洗：抹平大模型对 new_trait 和 trait 的混用
+                if "trait" in item and "new_trait" not in item:
+                    item["new_trait"] = item.pop("trait")
+                
                 if t == "NEW" and "new_trait" in item and "category" in item: 
                     is_valid = True
-                elif t == "CONFLICT" and "new_trait" in item and "old_trait" in item and "category" in item: 
+                    
+                elif t == "CONFLICT" and "new_trait" in item and "category" in item: 
+                    if "old_trait" not in item:
+                        # 顺手把模型自己发明的 evidence 接住，当作 old_trait 的参考
+                        item["old_trait"] = item.pop("evidence", "未知(大模型未提取)")
                     is_valid = True
-                elif t == "ENTITY_UPDATE" and "entity" in item and "new_trait" in item: 
-                    is_valid = True
+                    
+                elif t == "ENTITY_UPDATE" and "entity" in item:
+                    if item["entity"] in ["我", "用户", "Boss", "Master", "本尊", "自己"]:
+                        continue # 物理兜底，防止把Boss当别人
+                    if "new_trait" in item:
+                        is_valid = True
+                    elif "trait" in item:
+                        item["new_trait"] = item.pop("trait") 
+                        is_valid = True
+                        
                 elif t == "COGNITIVE_UPDATE" and "domain" in item and "new_cognition" in item: 
                     is_valid = True
+                    
                 if is_valid:
                     item["id"] = f"mem_{uuid.uuid4().hex[:8]}"
                     results.append(item)
                 else:
-                    # 记录脏数据，坚决不让它弄脏下游的主控引擎
                     print(f"⚠️ [防线拦截] 丢弃格式不完整的大模型幻觉碎片: {item}")          
             return results
         except Exception as e:
-            print(f"🚨 [仲裁官] 大模型判决异常: {e}")
+            print(f" [仲裁官] 大模型判决异常: {e}")
             return []
 
     def check_and_promote(self, llm_caller=None, entity_callback=None):
         self.run_garbage_collection()
-        print("\n🛂 [晋升海关] 开始审计潜意识与时间流逝...")
+        print("\n [晋升海关] 开始审计潜意识与时间流逝...")
         now = datetime.now()
         # 阶段 1：处理时间流逝（引爆过了 3 天的 PENDING 炸弹）
         with open(self.pending_path, 'r', encoding='utf-8') as f:
@@ -113,21 +121,21 @@ class PromotionGatekeeper:
             if item["status"] == "PENDING":
                 expire_time = datetime.fromisoformat(item["expires_at"])
                 if now >= expire_time:
-                    # 🚨 触发你的强制规则：超过3天无操作，直接强行覆盖！
+                    # 超过3天无操作，直接强行覆盖！
                     cat = item["category"]
                     # 覆写操作：移除旧的，加入新的
                     if item.get("old_trait") in current_profile[cat]:
                         current_profile[cat].remove(item["old_trait"])
                     current_profile[cat].append(item["new_trait"])   
                     item["status"] = "AUTO_OVERWRITTEN"
-                    print(f"⏰ [超时裁决] 记忆冲突超期未处理，已强行覆写: {item['new_trait']}") 
+                    print(f" [超时裁决] 记忆冲突超期未处理，已强行覆写: {item['new_trait']}") 
                     # 写入黑盒
                     self._write_blackbox("TIMEOUT_OVERWRITE", item) 
             active_queue.append(item)
         # 阶段 2：处理新产生的暗影碎片
         fragments_files = glob.glob(f"{self.fragments_dir}/*.json")
         if fragments_files:
-            print(f"🔍 发现 {len(fragments_files)} 个新暗影碎片，正在进行 LLM 仲裁...")
+            print(f" 发现 {len(fragments_files)} 个新暗影碎片，正在进行 LLM 仲裁...")
             new_traits = []
             valid_files = []
             for file in fragments_files:
@@ -174,13 +182,13 @@ class PromotionGatekeeper:
                         active_queue.append(result)
                         print(f"⚠️ [记忆冲突] 发现冲突，已挂起并设定 3 天倒计时: {result['new_trait']}")
                         self._write_blackbox("CONFLICT_DETECTED", result)
-                # 🔪 确认消费完毕，此时安全销毁物理文件！
+                # 确认消费完毕，此时安全销毁物理文件！
                 for file in valid_files:
                     try:
                         os.remove(file)
                     except: pass
             else:
-                print("🚨 仲裁网络中断！为了保护记忆碎片，本次不销毁物理文件，等待下次重启重试。")
+                print(" 仲裁网络中断！为了保护记忆碎片，本次不销毁物理文件，等待下次重启重试。")
         # 阶段 3：统一落盘保存
         with open(self.profile_path, 'w', encoding='utf-8') as f:
             json.dump(current_profile, f, ensure_ascii=False, indent=2)
@@ -188,7 +196,7 @@ class PromotionGatekeeper:
             json.dump({"queue": active_queue}, f, ensure_ascii=False, indent=2)
         with open(self.cognitive_path, 'w', encoding='utf-8') as f:
             json.dump(current_cognitive, f, ensure_ascii=False, indent=2)
-        print("✅ [晋升海关] 审计与时空流转结算完毕。\n")
+        print(" [晋升海关] 审计与时空流转结算完毕。\n")
 
     def run_garbage_collection(self):
         """ 抹除超过 7 天的已归档记忆（绝不触碰黑盒）"""

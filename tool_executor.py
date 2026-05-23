@@ -31,6 +31,7 @@ class ToolExecutor:
         # 新增：UI 控制通道
         elif func_name == "control_ui_layout":
             target = args.get("target_panel")
+            component = args.get("target_component", "")
             state = args.get("state")
             print(f"🪄 [UI 魔法] 大模型主动施法：将 {target} 切换至 {state} 模式")
             # 使用事件总线，将这个纯粹的 UI 指令通过 WebSocket 推给前端
@@ -39,6 +40,7 @@ class ToolExecutor:
                 asyncio.run(event_bus.publish({
                     "type": "ui_command",
                     "target_panel": target,
+                    "target_component": component,
                     "state": state
                 }))
                 print(f"✅ [UI 魔法] 成功通过 WebSocket 下发 {state} 指令！")
@@ -80,6 +82,17 @@ class ToolExecutor:
             method = execution_config.get("method", "POST").upper()
             headers = execution_config.get("headers", {})
 
+            from main import VAULT_ROOT
+            try:
+                with open(os.path.join(VAULT_ROOT, ".server_port"), "r", encoding="utf-8") as f:
+                    actual_port = f.read().strip()
+                if endpoint.startswith("/"):
+                    endpoint = f"http://127.0.0.1:{actual_port}{endpoint}"
+            except Exception:
+                # 容错降级
+                if endpoint.startswith("/"):
+                    endpoint = f"http://127.0.0.1:8000{endpoint}"
+
             def replace_vars(node):
                 if isinstance(node, str):
                     if node == "{args}":
@@ -105,6 +118,8 @@ class ToolExecutor:
                     resp = requests.get(endpoint, params=request_data, headers=headers, timeout=15)
                 resp.raise_for_status() 
                 return resp.text
+            except Exception as e: # 扩大异常捕获，防止 URL 解析错误导致线程崩溃
+                return f"[SYSTEM_ERROR]: 请求外部 Agent 失败 ({endpoint})。错误信息: {str(e)}"
             except requests.exceptions.Timeout:
                 return "[SYSTEM_ERROR]: 请求 Agent 超时 (>15秒)。可能原因：对方服务器宕机或网络阻塞。"
             except requests.exceptions.ConnectionError:

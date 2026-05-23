@@ -23,7 +23,7 @@
             <thead><tr><th>封面</th><th>曲目名称</th><th>艺术家</th><th>资产来源 (URL)</th><th style="min-width: 100px;">操作</th></tr></thead>
             <tbody>
               <tr v-for="track in trackList" :key="track.url">
-                <td><img :src="track.cover_url || defaultCover" class="list-cover" /></td>
+                <td><img :src="track.cover_url ? getFullUrl(track.cover_url) : defaultCover" class="list-cover" /></td>
                 <td :class="{'dead-link': track.title.includes('【失效】')}">{{ track.title }}</td>
                 <td>{{ track.artist }}</td>
                 <td class="url-cell" :title="track.url">{{ track.url }}</td>
@@ -63,7 +63,7 @@
               <label>本地封面图 (仅限一张)</label>
               
               <div v-if="currentTab === 'edit' && formData.cover_url && !coverFile" class="current-cover-preview">
-                <img :src="formData.cover_url" alt="Current Cover" />
+                <img :src="formData.cover_url ? getFullUrl(formData.cover_url) : defaultCover" alt="Current Cover" />
                 <span>当前存储的封面</span>
               </div>
 
@@ -96,8 +96,9 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { SystemConfig } from 'vault:useNeuroLink';
 
-// 🚀 OS 视窗物理引擎：拖拽、缩放与最大化
+// OS 视窗物理引擎：拖拽、缩放与最大化
 const winPos = ref({ x: window.innerWidth/2 - 400, y: window.innerHeight/2 - 300 });
 const winSize = ref({ w: 800, h: 600 });
 const zIndex = ref(9999);
@@ -109,7 +110,11 @@ const windowStyle = computed(() => {
   }
   return { left: `${winPos.value.x}px`, top: `${winPos.value.y}px`, width: `${winSize.value.w}px`, height: `${winSize.value.h}px`, zIndex: zIndex.value };
 });
-
+const getFullUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return SystemConfig.API_BASE + url;
+};
 const toggleMaximize = () => { isMaximized.value = !isMaximized.value; };
 const bringToFront = () => { zIndex.value = 10000; };
 
@@ -161,7 +166,7 @@ const sysMsg = ref('');
 
 const fetchList = async () => {
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/plugins/music_agent/list');
+    const res = await fetch(`${SystemConfig.API_BASE}/api/plugins/music_agent/list`);
     const data = await res.json();
     if (res.ok) trackList.value = data.data;
   } catch (e) { console.error("拉取列表失败", e); }
@@ -203,7 +208,7 @@ const submitForm = async () => {
   const endpoint = currentTab.value === 'edit' ? '/update' : '/add';
   
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/plugins/music_agent${endpoint}`, { method: 'POST', body: fd });
+    const res = await fetch(`${SystemConfig.API_BASE}/api/plugins/music_agent${endpoint}`, { method: 'POST', body: fd });
     if (!res.ok) throw new Error((await res.json()).detail || "API 拒绝");
     sysMsg.value = currentTab.value === 'edit' ? "✅ 修改已保存！" : "✅ 资产已入库！";
     fetchList();
@@ -214,7 +219,7 @@ const submitForm = async () => {
 
 const deleteTrack = async (url) => {
   try {
-    await fetch(`http://127.0.0.1:8000/api/plugins/music_agent/delete?url=${encodeURIComponent(url)}`, { method: 'DELETE' });
+    await fetch(`${SystemConfig.API_BASE}/api/plugins/music_agent/delete?url=${encodeURIComponent(url)}`, { method: 'DELETE' });
     confirmingDelete.value = null;
     fetchList();
   } catch (e) { alert("删除失败"); }
@@ -222,7 +227,7 @@ const deleteTrack = async (url) => {
 
 const markDead = async (url) => {
   try {
-    await fetch(`http://127.0.0.1:8000/api/plugins/music_agent/mark_dead`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+    await fetch(`${SystemConfig.API_BASE}/api/plugins/music_agent/mark_dead`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
     fetchList();
   } catch (e) { alert("标记失败"); }
 };

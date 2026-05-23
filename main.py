@@ -13,32 +13,22 @@ import concurrent.futures
 from datetime import datetime
 
 def get_vault_root():
-    # getattr(sys, 'frozen', False) 是 PyInstaller 打包后的专属标记
+    # 工业级路径寻址：全系统唯一的“绝对真理”
     if getattr(sys, 'frozen', False):
-        # 【生产环境 (发版)】：定位到用户的 AppData 目录
-        if platform.system() == "Windows":
-            base_dir = os.environ.get("APPDATA", os.path.expanduser("~"))
-        else:
-            base_dir = os.path.expanduser("~/Library/Application Support")
-            
-        prod_vault_path = os.path.join(base_dir, "VaultOS", "vault")
-        
-        # 如果是用户第一次安装打开，执行“种子释放”
-        if not os.path.exists(prod_vault_path):
-            os.makedirs(os.path.dirname(prod_vault_path), exist_ok=True)
-            # sys._MEIPASS 是打包后的临时解压目录，里面藏着我们的干净种子
-            seed_path = os.path.join(sys._MEIPASS, "vault") 
-            if os.path.exists(seed_path):
-                print("🌱 [系统初始化] 正在向系统盘释放初始外脑种子...")
-                shutil.copytree(seed_path, prod_vault_path, dirs_exist_ok=True)
-        return prod_vault_path
+        # 生产环境：以打包后的 vault_engine.exe 所在的物理目录为基准
+        base_dir = os.path.dirname(sys.executable)
     else:
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "vault")
+        # 开发环境：以当前 main.py 文件所在目录为基准
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+    prod_vault_path = os.path.join(base_dir, "vault")
+    os.makedirs(prod_vault_path, exist_ok=True)
+    return prod_vault_path
 
 VAULT_ROOT = get_vault_root()
-print(f"📂 [外脑物理锚点] 核心资产底座: {VAULT_ROOT}")
+print(f" [外脑物理锚点] 核心资产底座: {VAULT_ROOT}")
 
-# 🛡️ 运行时路径嗅探器 (Audit Hook)
+#  运行时路径嗅探器 (Audit Hook)
 def path_sniffer(event, args):
     # 只要 Python 底层触发了文件打开动作
     if event == "open":
@@ -46,10 +36,10 @@ def path_sniffer(event, args):
         if isinstance(file_path, str):
             # 命中规则 1：出现俄罗斯套娃
             if "vault/vault" in file_path.replace("\\", "/"):
-                print(f"🚨 [系统探针] 抓获套娃路径: {file_path}")
+                print(f" [系统探针] 抓获套娃路径: {file_path}")
             # 命中规则 2：使用了相对路径的 vault/ (在生产环境绝对不允许)
             elif not os.path.isabs(file_path) and file_path.replace("\\", "/").startswith("vault/"):
-                print(f"🚨 [系统探针] 抓获未包裹 VAULT_ROOT 的野狗路径: {file_path}")
+                print(f" [系统探针] 抓获未包裹 VAULT_ROOT 的野狗路径: {file_path}")
 
 # 激活底层的监听！
 sys.addaudithook(path_sniffer)
@@ -62,13 +52,13 @@ try:
     from tool_registry import ToolRegistry
     from tool_executor import ToolExecutor
 except ImportError as e:
-    print(f"🚨 引擎组件缺失: {e}")
+    print(f" 引擎组件缺失: {e}")
     print("请确保所有组件脚本 (.py) 都在当前目录下！")
     sys.exit(1)
 
 class VaultOS_Terminal:
     def __init__(self):
-        print("⚙️  正在初始化 AI 算力...")
+        print(" 正在初始化 AI 算力...")
         self._boot_sequence() 
         # 1. 定义物理存储路径
         self.chat_history_path = os.path.join(VAULT_ROOT, "chat_history.json") 
@@ -103,16 +93,16 @@ class VaultOS_Terminal:
         chunks = payload_data.get("payload", [])
 
         if command != "RAG_UPSERT" or not source_file:
-            print("🚨 [RAG 网关] 拦截到非法或不完整的载荷指令！丢弃。")
+            print(" [RAG 网关] 拦截到非法或不完整的载荷指令！丢弃。")
             return False
         try:
-            print(f"\n📥 [RAG 网关] 收到来自外挂仓管的更新请求: {source_file}")
+            print(f"\n [RAG 网关] 收到来自外挂仓管的更新请求: {source_file}")
             if hasattr(self.vector_db, 'delete_by_source'):
                 deleted_count = self.vector_db.delete_by_source(source_file)
             else:
                 deleted_count = 0
             if not chunks:
-                print(f"🗑️ [RAG 网关] 载荷为空，已完成该文件的彻底注销。")
+                print(f" [RAG 网关] 载荷为空，已完成该文件的彻底注销。")
                 return True
             texts = []
             metadatas = []
@@ -131,11 +121,11 @@ class VaultOS_Terminal:
                 ids.append(f"rag_{new_hash}_{i}")
             if hasattr(self.vector_db, 'add_chunks'):
                 self.vector_db.add_chunks(texts, metadatas, ids)
-                print(f"✅ [RAG 网关] 成功同化 {len(texts)} 块高纯度记忆碎片！\n")
+                print(f"[RAG 网关] 成功同化 {len(texts)} 块高纯度记忆碎片！\n")
                 return True
             return False
         except Exception as e:
-            print(f"💥 [RAG 网关] 数据引流发生雪崩，执行中断: {e}")
+            print(f" [RAG 网关] 数据引流发生雪崩，执行中断: {e}")
             return False
 
     def _load_config(self):
@@ -161,16 +151,16 @@ class VaultOS_Terminal:
         try:
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 json.dump(default_config, f, ensure_ascii=False, indent=2)
-            print(f"📦 [系统] 已自动生成初始配置文件: {self.config_path}")
+            print(f" [系统] 已自动生成初始配置文件: {self.config_path}")
         except Exception as e:
-            print(f"🚨 [系统] 自动生成配置文件失败: {e}")  
+            print(f" [系统] 自动生成配置文件失败: {e}")  
         return default_config
 
     def save_config(self, new_config):
         self.llm_config = new_config
         with open(self.config_path, 'w', encoding='utf-8') as f:
             json.dump(self.llm_config, f, ensure_ascii=False, indent=2)
-        print("⚙️  [系统核心] 大模型配置已更新，正在热重载引擎...")
+        print("  [系统核心] 大模型配置已更新，正在热重载引擎...")
         self._init_llm_client()
 
     def _init_llm_client(self):
@@ -202,22 +192,24 @@ class VaultOS_Terminal:
 
     def get_response(self, user_input: str, thread_id: str = "global", display_message: str = None) -> str:
         if not self.llm_config.get("api_key"):
-            return "⚠️ [系统提醒] 核心引擎尚未激活。请前往「引擎设置」配置您的 API Key。"
+            return " [系统提醒] 核心引擎尚未激活。请前往「引擎设置」配置您的 API Key。"
         if display_message is None:
             display_message = user_input
         try:
-            print(f"🧠 [收到指令] 正在思考: {display_message} (线程: {thread_id})")   
+            print(f" [收到指令] 正在思考: {display_message} (线程: {thread_id})")   
             if display_message.lower() == '/audit':
                 self.gatekeeper.check_and_promote(
                     llm_caller=self._call_llm_json, 
                     entity_callback=self._update_entity_file
                 )
-                return "✅ [系统动作] 审计完毕：暗影碎片已完成提纯与画像晋升。"
+                return " [系统动作] 审计完毕：暗影碎片已完成提纯与画像晋升。"
                 
-            print("🕵️  [暗影守护者] 正在扫描用户输入提取习惯...")
+            print(" [暗影守护者] 正在扫描用户输入提取习惯...")
             def _shadow_pipeline():
                 current_history = self.threads.get(thread_id, [])
-                self.extractor.analyze_input(display_message, self._mock_llm_for_extractor, chat_history=current_history)
+                caller_with_memory = lambda p, u: self._mock_llm_for_extractor(p, u, chat_history=current_history)
+                
+                self.extractor.analyze_input(display_message, caller_with_memory, chat_history=current_history)
                 self.gatekeeper.check_and_promote(
                     llm_caller=self._call_llm_json, 
                     entity_callback=self._update_entity_file
@@ -226,19 +218,19 @@ class VaultOS_Terminal:
 
             blueprint = self._compile_jit_task(display_message)
             status = blueprint.get("plan_status", "DIRECT_CHAT")
-            print(f"🔀 [编译决断]: {status} | 理由: {blueprint.get('reasoning')}")
+            print(f" [编译决断]: {status} | 理由: {blueprint.get('reasoning')}")
             
             retrieved_context = ""
             if status == "NEEDS_NEW_TOOLS":
                 suggestion = blueprint.get("suggestion_msg", "Boss，我缺少完成此任务的工具。")
                 missing = ", ".join(blueprint.get("missing_capabilities", []))
-                print(f"⚠️ [能力探针] 发现缺失能力: {missing}")
-                answer = f"🤖 [Vault OS 架构建议]:\n{suggestion}\n\n(系统检测到缺失核心组件：{missing}。您可以前往 VPM 插件中心挂载相关能力后，再次下达该指令。)"
+                print(f" [能力探针] 发现缺失能力: {missing}")
+                answer = f" [Vault OS 架构建议]:\n{suggestion}\n\n(系统检测到缺失核心组件：{missing}。您可以前往 VPM 插件中心挂载相关能力后，再次下达该指令。)"
                 self._save_to_disk()
                 return answer
                 
             elif status == "READY":
-                print("📋 [DAG 引擎] 图纸审核通过，正在初始化系统黑板...")
+                print(" [DAG 引擎] 图纸审核通过，正在初始化系统黑板...")
                 steps = blueprint.get("steps", [])
                 blackboard = {key: None for key in blueprint.get("blackboard_keys", [])}
                 bb_lock = threading.Lock()
@@ -259,7 +251,7 @@ class VaultOS_Terminal:
                             else:
                                 resolved_args[k] = v
                     
-                    print(f"   -> 🚀 [并发激活] 委派任务至: {tool_name} ...")
+                    print(f"   -> [并发激活] 委派任务至: {tool_name} ...")
                     class MockToolCall:
                         class MockFunction:
                             def __init__(self, name, arguments):
@@ -271,7 +263,7 @@ class VaultOS_Terminal:
                     if output_key:
                         with bb_lock:
                             blackboard[output_key] = step_result
-                        print(f"   -> 📝 [黑板更新] 已写入共享变量: {output_key}")
+                        print(f"   -> [黑板更新] 已写入共享变量: {output_key}")
                         
                 with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
                     pending_steps = steps.copy()
@@ -298,7 +290,7 @@ class VaultOS_Terminal:
                                     if f.done() and sid not in completed_step_ids:
                                         completed_step_ids.add(sid)
                         if not progress_made and not [f for sid, f in step_futures.items() if not f.done()]:
-                            print("⚠️ [DAG 引擎] 警告：发现无法满足的依赖逻辑环，强制中止剩余蓝图！")
+                            print(" [DAG 引擎] 警告：发现无法满足的依赖逻辑环，强制中止剩余蓝图！")
                             break 
                 if any(step.get("tool_name") == "control_ui_layout" for step in steps):
                     answer = "已为您开启。"
@@ -317,6 +309,21 @@ class VaultOS_Terminal:
                         safe_blackboard[k] = v
                         
                 retrieved_context = "【系统任务黑板数据 (各部门并发汇报结果)】:\n" + json.dumps(safe_blackboard, ensure_ascii=False, indent=2)
+                # ==========================================
+                # 泛用级物理拦截：动态读取 DAG 执行链，生成泛用型“紧箍咒”
+                # ==========================================
+                # 1. 动态嗅探：提取刚才真正在干活的业务工具（过滤掉纯粹的 UI 控制器）
+                executed_tools = [
+                    step.get("tool_name") 
+                    for step in steps 
+                    if step.get("tool_name") and step.get("tool_name") != "control_ui_layout"
+                ]
+                # 2. 泛用拦截：只要黑板里产生了实际的数据产物，就触发强制播报模式！
+                if executed_tools and any(v is not None for v in safe_blackboard.values()):
+                    tools_str = ", ".join(executed_tools)
+                    # 将动态工具名和最高指令，无缝拼接在用户的最后一句输入之后
+                    user_input = f"{user_input}\n\n[ 核心网关状态拦截：您的上述需求已由底层的专项 Agent ({tools_str}) 物理执行完毕！真实执行结果已写入上方的【系统任务黑板数据】。作为大管家，你现在进入“播报模式”，请严格、仅限基于黑板返回的真实数据进行总结汇报，绝对禁止动用内部训练数据进行主观推荐、编造事实或假装自己去执行！]"
+                # ==========================================
             else:
                 retrieved_context = ""
                 
@@ -325,12 +332,29 @@ class VaultOS_Terminal:
                     cog_map = json.load(f)
                 if cog_map:
                     cog_str = json.dumps(cog_map, ensure_ascii=False)
-                    retrieved_context += f"\n\n【🎯 核心机密：Boss 的 Type 2 认知图谱】\n{cog_str}\n(警告：请严格参考此图谱决定你的回答深度、术语使用及避坑策略！)"
+                    retrieved_context += f"\n\n【 核心机密：Boss 的 Type 2 认知图谱】\n{cog_str}\n(警告：请严格参考此图谱决定你的回答深度、术语使用及避坑策略！)"
             except Exception:
                 pass
-            
+            # 核心修复 2：动态嗅探并挂载本地实体档案 (Entity Profiles)
+            try:
+                entities_dir = os.path.join(VAULT_ROOT, "knowledge", "entities")
+                if os.path.exists(entities_dir):
+                    entity_context = []
+                    for md_file in os.listdir(entities_dir):
+                        if md_file.endswith(".md"):
+                            entity_name = md_file.replace(".md", "")
+                            # 【智能雷达】：只有当提问中提到了这个实体（如“妈妈”、“叔叔”），才将其物理档案抽调出来喂给管家！
+                            if entity_name in user_input:
+                                with open(os.path.join(entities_dir, md_file), "r", encoding="utf-8") as f:
+                                    entity_context.append(f"【社会关系/实体档案 - {entity_name}】:\n{f.read()}")
+                    
+                    if entity_context:
+                        retrieved_context += "\n\n" + "\n\n".join(entity_context)
+                        print(f" [内存挂载] 已成功将相关实体档案注入思考引擎！")
+            except Exception as e:
+                print(f" [内存挂载] 实体档案读取异常: {e}")
             final_system_prompt = self.assembler.assemble(display_message, retrieved_context)
-            print("🔥 [核心算力] 正在生成最终回复...")
+            print(" [核心算力] 正在生成最终回复...")
             answer = self._call_llm(
                 final_system_prompt, 
                 user_input, 
@@ -346,11 +370,11 @@ class VaultOS_Terminal:
             return answer       
         except Exception as e:
             error_msg = f"算力中心崩溃啦：{str(e)}"
-            print(f"🚨 {error_msg}")
+            print(f" {error_msg}")
             return error_msg
 
     def perform_memory_surgery(self, user_command):
-        print(f"\n🔪 [记忆手术] 收到最高干预指令: {user_command}")
+        print(f"\n [记忆手术] 收到最高干预指令: {user_command}")
         self._write_to_blackbox("memory_surgery_boss", user_command)
         try:
             with open(self.gatekeeper.pending_path, 'r', encoding='utf-8') as f:
@@ -358,7 +382,7 @@ class VaultOS_Terminal:
             with open(self.gatekeeper.profile_path, 'r', encoding='utf-8') as f:
                 profile = json.load(f)
         except Exception as e:
-            return f"🚨 无法读取脑区数据: {e}"
+            return f" 无法读取脑区数据: {e}"
         prompt = f"""
         你是 Vault OS 的潜意识记忆外科医生。
         【当前等待裁决的冲突队列】：{json.dumps(pending.get('queue', []), ensure_ascii=False)}
@@ -389,42 +413,64 @@ class VaultOS_Terminal:
                     json.dump({"queue": result_json["updated_queue"]}, f, ensure_ascii=False, indent=2)
                 with open(self.gatekeeper.profile_path, 'w', encoding='utf-8') as f:
                     json.dump(result_json["updated_profile"], f, ensure_ascii=False, indent=2)   
-                print(f"✅ [记忆手术] 成功: {result_json.get('reply')}")
+                print(f" [记忆手术] 成功: {result_json.get('reply')}")
                 return result_json.get("reply", "神经链路重塑完毕。")
             else:
-                return "⚠️ 手术中止：大模型未能按标准格式完成缝合。"        
+                return " 手术中止：大模型未能按标准格式完成缝合。"        
         except Exception as e:
-            print(f"🚨 [记忆手术] 致命错误: {e}")
-            return "⚠️ 脑区链接断开，手术失败。"
+            print(f" [记忆手术] 致命错误: {e}")
+            return " 脑区链接断开，手术失败。"
     
     def _update_entity_file(self, entity_name, new_trait):
         entity_dir = os.path.join(VAULT_ROOT, "knowledge", "entities")
         os.makedirs(entity_dir, exist_ok=True)
         file_path = os.path.join(entity_dir, f"{entity_name}.md")
+        final_content = "" 
+        
         if not os.path.exists(file_path):
+            final_content = f"---\ntitle: {entity_name} 的核心画像\ncategory: EntityProfile\n---\n\n## 基础情报\n- {new_trait}\n"
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(f"---\ntitle: {entity_name} 的核心画像\ncategory: EntityProfile\n---\n\n")
-                f.write(f"## 🧬 基础情报\n- {new_trait}\n")
-            print(f"🆕 [实体档案] 已为 {entity_name} 建立初始卷宗。")
+                f.write(final_content)
+            print(f" [实体档案] 已为 {entity_name} 建立初始卷宗。")
         else:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     old_content = f.read()
+                    
+                # 【架构升级】：引入高强度语义排他性检测的合并器 Prompt
                 prompt = f"""
-                档案整理员，【{entity_name}】现有内容：\n{old_content}\n新情报："{new_trait}"
-                合并规则：冲突则覆盖，补充则追加。直接输出 Markdown。
+                你是 Vault OS 的专属档案整理专家。
+                你需要将新收集到的碎片情报，无缝且合乎逻辑地融入该实体的现有 Markdown 档案中。
+                
+                【实体名称】：{entity_name}
+                【现有档案内容】：
+                {old_content}
+
+                【需要合入的新情报】："{new_trait}"
+
+                【最高修改法则】：
+                1. 语义排他性检测（冲突覆盖）：仔细对比新情报与现有情报。如果新情报与旧情报属于“互斥”或“同类属性更替”（例如：原本喜欢苹果，现在说喜欢哈密瓜；或者原本住北京，现在住上海），你必须【物理抹除】旧的属性记录，只保留新情报！绝对禁止出现“既喜欢苹果又喜欢哈密瓜”的自相矛盾罗列。
+                2. 知识增量（补充追加）：只有当新情报是一个完全不相关的全新维度（比如原来只记录了职业，新情报是爱好）时，才作为新的一行无序列表追加。
+                3. 格式洁癖：必须完整保留文件头部的 --- frontmatter --- 和所有 Markdown 标题结构，只精确修改正文的内容。
+                
+                请直接输出修改完毕的完整 Markdown 文本，绝不允许包含任何解释性文字或 ```markdown 标记。
                 """
+                
+                # 算力升级：从 model_mini 切换到 model_max，确保合并逻辑严密
                 response = self.client.chat.completions.create(
-                    model=self.llm_config.get("model_mini", "qwen-turbo"),
+                    model=self.llm_config.get("model_max", "qwen-max"),
                     messages=[{"role": "user", "content": prompt}]
                 )
+                
                 new_content = response.choices[0].message.content
-                new_content = re.sub(r'^```markdown\s*|```$', '', new_content.strip(), flags=re.DOTALL)
+                # 增强型正则表达式：暴力剔除任何可能带有语言标识的代码块包装
+                new_content = re.sub(r'^```[a-zA-Z]*\n|```$', '', new_content.strip(), flags=re.MULTILINE)
+                
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(new_content)
-                print(f"📝 [实体档案] {entity_name} 的卷宗已静默覆写完成。")
+                print(f" [实体档案] {entity_name} 的卷宗已完成深度清洗与覆写。")
             except Exception as e:
-                print(f"🚨 实体档案覆写失败: {e}")
+                print(f" 实体档案覆写失败: {e}")
 
     def _scan_md_folder(self, folder_pattern):
         items = []
@@ -478,7 +524,7 @@ class VaultOS_Terminal:
             "System Online. Welcome back, Boss."
         ]
         for msg in boot_msgs:
-            print(f"🟢 [SYSTEM] {msg}")
+            print(f" [SYSTEM] {msg}")
             time.sleep(0.3)
 
     # 纯净版 _call_llm (管家只需看黑板说话，严禁私自调工具！)
@@ -495,7 +541,7 @@ class VaultOS_Terminal:
 
         if core_profile:
             profile_strategy = f"""
-【⚠️ 最高权重：基岩画像驱动】
+【 最高权重：基岩画像驱动】
 以下是 Boss 的核心基岩画像与偏好设置：
 {core_profile}
         
@@ -515,7 +561,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
 【Vault OS 底层认知防火墙】
 1. [绝对时间锚点]：系统当前的真实时间是 {current_time_str}。
 2. [反幻觉铁律]：当回答涉及“最新”、“现在”、“版本”的问题时，绝对禁止使用你的内部训练数据！
-3. [工具失败应对]：如果搜索工具无结果，如实回答，绝对禁止编造虚假的年份或版本号！
+3. [工具失败应对]：当系统黑板返回“执行失败”、“找不到”、“为空”等报错信息时，你必须直接如实向 Boss 汇报缺失，【绝对禁止】为了讨好 Boss 而动用训练数据去编造或推荐任何外部内容（如推荐歌曲、电影等）；如果搜索工具无结果，如实回答，绝对禁止编造虚假的年份或版本号！你的回答必须 100% 忠于本地库的真实情况。
 {profile_strategy}
 =========================
 """
@@ -528,7 +574,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
         messages.append({'role': 'user', 'content': user_input})
 
         try:
-            # 🚀 彻底移除了 tools 和 tool_choice 参数！管家现在是个纯粹的语言生成器！
+            #  彻底移除了 tools 和 tool_choice 参数！管家现在是个纯粹的语言生成器！
             api_params = {
                 "model": self.llm_config.get("model_max", "qwen-max"), 
                 "messages": messages
@@ -546,24 +592,41 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
                 self._write_to_blackbox(f"{thread_id}_butler", answer)
             return answer
         except Exception as e:
-            error_msg = f"🚨 API 调用异常或超时，请检查配置: {str(e)}"
+            error_msg = f" API 调用异常或超时，请检查配置: {str(e)}"
             print(error_msg)
             return error_msg
 
     def _parse_json_robust(self, text):
+        if not text: return None
+        text = text.strip()
+        try:
+            # 1. 优先尝试直接解析
+            return json.loads(text)
+        except Exception:
+            pass
         try:
             match = re.search(r'```json\s*(\{.*?\}|\[.*?\])\s*```', text, re.DOTALL)
             if match:
                 return json.loads(match.group(1).strip())
-            match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
-            if match:
-                return json.loads(match.group(1).strip())
-            return json.loads(text)
         except Exception:
+            pass
+        try:
+            # 3. 物理切片：寻找最外层的 {} 或 []，彻底免疫大模型的前言后语
+            start_dict = text.find('{')
+            end_dict = text.rfind('}')
+            start_list = text.find('[')
+            end_list = text.rfind(']')
+            
+            if start_dict != -1 and end_dict != -1 and (start_list == -1 or start_dict < start_list):
+                return json.loads(text[start_dict:end_dict+1])
+            elif start_list != -1 and end_list != -1:
+                return json.loads(text[start_list:end_list+1])
+        except Exception as e:
+            print(f" [底层JSON脱壳异常]: {e}")
             return None
 
     def _compile_jit_task(self, user_input: str) -> dict:
-        print("💡 [JIT 编译器] 正在为复杂任务绘制动态执行蓝图...")
+        print(" [JIT 编译器] 正在为复杂任务绘制动态执行蓝图...")
         # 让 CEO (JIT编译器) 也拥有时间观念
         current_time_str = datetime.now().strftime("%Y年%m月%d日")
         current_tools = self.registry.get_tools()
@@ -587,8 +650,12 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
         {json.dumps(tool_specs, ensure_ascii=False)}
         
         【你的任务】：评估任务所需的能力。
-        1. 如果现有工具足以完成任务，请规划一条清晰的执行步骤 (DAG)，并设定黑板需要记录的数据。
-        2. 如果现有工具【不足以】完美完成任务，请中止规划，并主动向主人提出插件下载建议。
+        第一步：判断主人的指令意图。
+               - 如果主人只是在闲聊、分享个人生活、陈述事实或表达喜好（例如：“我父亲喜欢吃西瓜”、“今天天气好”、“我平时爱看书”）：
+                 【立刻停止思考工具！】底层暗影进程会自动提取记忆。你必须直接返回：{{"plan_status": "DIRECT_CHAT"}}
+        第二步：如果主人明确下达了需要操作的指令（如播放音乐、查询网络、操控系统），才去匹配上方工具。
+               - 如果有工具可以满足需求 -> 返回 "READY" 并规划 steps。
+               - 如果没有任何工具能做到 -> 返回 "NEEDS_NEW_TOOLS"。
 
         【强制输出 JSON 格式】：
         必须严格输出以下格式的 JSON，不要包含任何多余文字：
@@ -601,15 +668,15 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
                 {{
                     "step_id": "s1",
                     "tool_name": "对应工具的准确 name",
-                    "args": {{"参数名": "参数值"}}, // 必须严格遵守上方工具说明中的 parameters 结构！
-                    "output_to_blackboard": "输出变量名"
-                }}
+                    "args": {{"参数名": "参数值"}}, 
+                    "output_to_blackboard": "必须起一个英文字段名，绝对不能为 null！"
+                }},
                 {{
                     "step_id": "s2",
                     "depends_on": ["s1"],
                     "tool_name": "另一个工具",
-                    "args": {{"file_data": "$$s1的输出变量名"}}, // 🚀 重点：使用 $$前缀 引用黑板上的数据传递给下个工具！
-                    "output_to_blackboard": null
+                    "args": {{"file_data": "$$s1的输出变量名"}}, 
+                    "output_to_blackboard": "必须起一个英文字段名，绝对不能为 null！"
                 }}
             ],
             "reasoning": "一句话解释你的规划逻辑"
@@ -627,18 +694,48 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
                 return parsed
             return {"plan_status": "DIRECT_CHAT"}
         except Exception as e:
-            print(f"🚨 [JIT 编译器] 脑区故障，降级为直连: {e}")
+            print(f" [JIT 编译器] 脑区故障，降级为直连: {e}")
             return {"plan_status": "DIRECT_CHAT"}
 
-    def _mock_llm_for_extractor(self, prompt, user_input):
-        messages = [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': user_input}]
+    def _mock_llm_for_extractor(self, prompt, user_input, chat_history=None):
+        strict_prompt = prompt + """\n\n【系统最高防线】：
+1. 必须输出合法的纯 JSON 格式！绝不允许包含前言后语。
+2. 【行为与事实的物理隔离】：提问、查询、下达指令等瞬时交互，绝对没有记忆价值！必须强制输出 {"action": "IGNORE"}。只有陈述客观事实、喜好、纠错才允许提取。
+3. 【实体剥离与强制 Schema】(致命错误防范)：
+   必须且只能输出这三个核心字段："action", "entity", "trait"！绝对禁止输出 "new_trait" 或 "evidence"！
+   - 描述创造者本人：{"action": "EXTRACT", "entity": "Boss", "trait": "..."}
+   - 描述其他人或事物：{"action": "EXTRACT", "entity": "标准称呼", "trait": "..."}
+
+【Few-Shot 标准输出示例】（必须严格照做）：
+=== 正例：事实陈述与纠错 ===
+用户输入："我出行喜欢做飞机"
+输出：{"action": "EXTRACT", "entity": "Boss", "trait": "出行喜欢乘坐飞机"}
+
+用户输入："不对，她喜欢吃哈密瓜"
+输出：{"action": "EXTRACT", "entity": "母亲", "trait": "喜欢吃哈密瓜"}
+
+=== 反例：提问与瞬时交互（极度重要，绝不允许提取！） ===
+用户输入："我父亲喜欢什么水果？"
+输出：{"action": "IGNORE"}
+
+用户输入："帮我查一下北京的天气"
+输出：{"action": "IGNORE"}
+"""
+        
+        messages = [{'role': 'system', 'content': strict_prompt}]
+
+        if chat_history and isinstance(chat_history, list):
+            messages.extend(chat_history[-4:])
+            
+        messages.append({'role': 'user', 'content': user_input})
+        
         try:
             response = self.client.chat.completions.create(
                 model=self.llm_config.get("model_mini", "qwen-turbo"),
                 messages=messages
             )
             content = response.choices[0].message.content
-            print(f"🕵️ [提取器原始输出]: {content.strip()}")
+            print(f" [提取器原始输出]: {content.strip()}")
             parsed = self._parse_json_robust(content) 
             if not parsed: return {"action": "IGNORE"} 
             if isinstance(parsed, list):
@@ -651,19 +748,19 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-                print(f"🗑️  [物理删除] 文件已移除: {file_path}")
+                print(f"  [物理删除] 文件已移除: {file_path}")
             if note_id in self.threads:
                 del self.threads[note_id]
                 self._save_to_disk()
-                print(f"🧠 [内存清理] 关联对话线程已移除: {note_id}")
+                print(f" [内存清理] 关联对话线程已移除: {note_id}")
             return True
         except Exception as e:
-            print(f"🚨 [删除失败] 错误原因: {e}")
+            print(f" [删除失败] 错误原因: {e}")
             return False
 
     def run_cli(self):
         print("\n" + "="*50)
-        print("⚡ Vault OS 主控终端已接管 ⚡")
+        print(" Vault OS 主控终端已接管 ")
         print("输入 '/ingest' 摄入新笔记，'/audit' 手动核准习惯，'/exit' 退出系统")
         print("="*50 + "\n")
 
@@ -672,7 +769,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
                 user_input = input("\n> Boss: ").strip()
                 if not user_input: continue
                 if user_input.lower() == '/exit':
-                    print("💤 Vault OS 进入休眠状态。")
+                    print(" Vault OS 进入休眠状态。")
                     break
                 if user_input.lower() == '/audit':
                     self.gatekeeper.check_and_promote(
@@ -680,9 +777,12 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
                         entity_callback=self._update_entity_file
                     )
                     continue
-                print("\n⚙️  [引擎运转中...]")
+                print("\n  [引擎运转中...]")
                 def _shadow_pipeline_cli():
-                    self.extractor.analyze_input(user_input, self._mock_llm_for_extractor, chat_history=self.threads.get("global", []))
+                    current_history = self.threads.get("global", [])
+                    caller_with_memory = lambda p, u: self._mock_llm_for_extractor(p, u, chat_history=current_history)
+                    
+                    self.extractor.analyze_input(user_input, caller_with_memory, chat_history=current_history)
                     self.gatekeeper.check_and_promote(
                         llm_caller=self._call_llm_json, 
                         entity_callback=self._update_entity_file
@@ -690,32 +790,35 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
                 threading.Thread(target=_shadow_pipeline_cli).start()
                 retrieved_context = ""
                 final_system_prompt = self.assembler.assemble(user_input, retrieved_context)
-                print("🧠 [LLM 推理中...]")
+                print(" [LLM 推理中...]")
                 answer = self._call_llm(final_system_prompt, user_input)
-                print(f"\n🤖 [Vault OS]:\n{answer}")
+                print(f"\ [Vault OS]:\n{answer}")
             except KeyboardInterrupt:
-                print("\n💤 检测到强制中断，Vault OS 进入休眠。")
+                print("\n 检测到强制中断，Vault OS 进入休眠。")
                 break
             except Exception as e:
-                print(f"\n🚨 系统崩溃: {str(e)}")
+                print(f"\n 系统崩溃: {str(e)}")
 
     def _call_llm_json(self, prompt, user_input="执行记忆仲裁"):
-        messages = [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': user_input}]
+        strict_prompt = prompt + "\n\n【系统最高指令】：\n1. 你必须且只能输出合法的纯 JSON 格式！\n2. 绝对不允许包含任何解释性文字、前言后语。\n3. 不要使用 ```json 标记，直接输出以 { 或 [ 开头的纯文本！"
+        messages = [{'role': 'system', 'content': strict_prompt}, {'role': 'user', 'content': user_input}]
         try:
             response = self.client.chat.completions.create(
                 model=self.llm_config.get("model_mini", "qwen-turbo"),
                 messages=messages
             )
             content = response.choices[0].message.content
-            print(f"⚖️ [仲裁官原始输出]: \n{content.strip()}\n" + "-"*30) 
+            print(f" [仲裁官原始输出]: \n{content.strip()}\n" + "-"*30) 
             parsed = self._parse_json_robust(content)
+            if isinstance(parsed, dict):
+                parsed = [parsed]
             return parsed if parsed else []
         except Exception as e:
-            print(f"🚨 后台 JSON 解析异常: {e}")
+            print(f" 后台 JSON 解析异常: {e}")
             return []
 
     def process_profile_import(self, file_content):
-        print("📡 [画像导入] 正在深度扫描文档内容...")
+        print(" [画像导入] 正在深度扫描文档内容...")
         seed_prompt = """
         你现在是 Vault OS 的初始化专家。请阅读用户提供的个人资料文档，
         从中提炼出关于用户的：coding_style(编程习惯), communication(交流风格), 
@@ -735,7 +838,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
                 timeout = 15
             )
             content = response.choices[0].message.content
-            print(f"🕵️ [画像提取器返回]: {content.strip()}")
+            print(f" [画像提取器返回]: {content.strip()}")
             raw_traits = self._parse_json_robust(content)
             if raw_traits:
                 success = self.gatekeeper.inject_pending_memories(raw_traits)

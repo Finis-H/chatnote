@@ -1,15 +1,17 @@
-from fastapi.responses import FileResponse
-import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import secrets
-import json
-import asyncio
 import os
+import sys
+import json
+import socket
+import uvicorn
+import secrets
+import asyncio
 import importlib.util
 import shutil
 import time
 
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from main import VaultOS_Terminal, VAULT_ROOT
 from sqlmodel import Session, select
 from db import engine, init_db
@@ -42,18 +44,32 @@ async def serve_plugin_ui(plugin_id: str, file_name: str):
     else:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="文件不存在")
-# 核心防御
+    
+def get_free_port(start_port=8000):
+    for port in range(start_port, 9000):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            # 如果 connect_ex 返回非 0，说明这个端口是空闲的
+            if s.connect_ex(('127.0.0.1', port)) != 0:
+                return port
+    raise RuntimeError(" 无法找到可用的本地端口！")
+
+#  分配端口并写下“双重信物”
+SERVER_PORT = get_free_port()
 SECURITY_TOKEN = secrets.token_hex(16)
+
 os.makedirs("vault", exist_ok=True)
 with open(os.path.join(VAULT_ROOT, ".run_token"), "w", encoding="utf-8") as f:
     f.write(SECURITY_TOKEN)
+with open(os.path.join(VAULT_ROOT, ".server_port"), "w", encoding="utf-8") as f:
+    f.write(str(SERVER_PORT))
 
 print("="*60)
-print(f"🚀 [网关启动] Vault OS 后台微服务已点火！")
-print(f"🔒 [安全系统] 本次运行专属 Token: {SECURITY_TOKEN}")
+print(f" [网关启动] Vault OS 后台微服务已点火！")
+print(f" [网络嗅探] 成功锁定可用端口: {SERVER_PORT}")
+print(f" [安全系统] 本次运行专属 Token: {SECURITY_TOKEN}")
 print("="*60)
 
-print("⚙️  正在唤醒底层大模型和向量引擎...")
+print(" 正在唤醒底层大模型和向量引擎...")
 vault_os = VaultOS_Terminal()
 
 @app.post("/api/rag/ingest")
@@ -68,12 +84,12 @@ async def api_rag_ingest(request: Request):
         # 1. 防御路径穿越攻击 (防范诸如 ../knowledge/xxx.md 的恶意路径)
         safe_source = os.path.normpath(source_file)
         if ".." in safe_source:
-            print(f"🚨 [安全拦截] 检测到恶意路径穿越攻击: {source_file}")
+            print(f" [安全拦截] 检测到恶意路径穿越攻击: {source_file}")
             return {"status": "error", "message": "非法路径！系统已拦截。"} 
         # 2. 权限隔离：外来 HTTP 请求【只能】操作 plugins 目录下的文件！
         allowed_prefix = os.path.normpath(PLUGINS_DIR)
         if not safe_source.startswith(allowed_prefix):
-            print(f"🚨 [越权拦截] 第三方 Agent 试图篡改系统核心记忆: {safe_source}")
+            print(f" [越权拦截] 第三方 Agent 试图篡改系统核心记忆: {safe_source}")
             return {"status": "error", "message": "越权操作：第三方插件仅允许操作自己的沙盒数据！"}
             
         success = await asyncio.to_thread(vault_os.receive_knowledge_payload, payload_data)
@@ -96,7 +112,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
             await websocket.send_json(event)
     consumer_task = asyncio.create_task(consume_events())
 
-    print("🟢 [连接成功] 神经链路已打通，正在同步初始状态...")
+    print(" [连接成功] 神经链路已打通，正在同步初始状态...")
     
     # 2. 连接刚建立时，立刻下发一次初始数据
     if hasattr(vault_os, 'threads') and vault_os.threads:
@@ -134,7 +150,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 
             elif cmd_type == "save_config":
                 vault_os.save_config(request.get("content")) 
-                await websocket.send_json({"type": "system_toast", "content": "✅ 系统核心已热重载！"})
+                await websocket.send_json({"type": "system_toast", "content": " 系统核心已热重载！"})
                 
             elif cmd_type == "fetch_memory":
                 try:
@@ -158,7 +174,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                                     info['plugin_id'] = p # 强行把物理文件夹名注入进去，作为唯一 ID
                                     plugins_info.append(info)
                             except Exception as e:
-                                print(f"🚨 [VPM] 解析插件 {p} 契约失败: {e}")
+                                print(f" [VPM] 解析插件 {p} 契约失败: {e}")
                                 
                 await websocket.send_json({"type": "plugins_list", "content": plugins_info})
             # VPM 物理卸载指令
@@ -184,7 +200,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                                         "payload": [] # 空载荷触发彻底删除
                                     }
                                     vault_os.receive_knowledge_payload(purge_payload)
-                            print(f"🧹 [系统屠魔] 插件 [{safe_id}] 的所有孤儿向量记忆已被主系统强行注销！")
+                            print(f" [系统屠魔] 插件 [{safe_id}] 的所有孤儿向量记忆已被主系统强行注销！")
 
                         # 1. 尝试调用插件专属的自毁钩子 (Lifecycle Hook)
                         if os.path.exists(api_file):
@@ -200,9 +216,9 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                         shutil.rmtree(plugin_path) 
                         
                         await websocket.send_json({"type": "plugin_uninstalled_success", "plugin_id": safe_id})
-                        await websocket.send_json({"type": "system_toast", "content": f"💥 插件 [{safe_id}] 已彻底卸载！"})
+                        await websocket.send_json({"type": "system_toast", "content": f" 插件 [{safe_id}] 已彻底卸载！"})
                     except Exception as e:
-                        await websocket.send_json({"type": "system_toast", "content": f"🚨 卸载崩溃: {e}"})
+                        await websocket.send_json({"type": "system_toast", "content": f" 卸载崩溃: {e}"})
             # === [通道 B：中等耗时的后台 IO 任务] ===
             elif cmd_type == "memory_surgery":
                 # 交给线程池处理，避免卡死当前通信
@@ -236,10 +252,10 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 asyncio.create_task(spawn_agent_task(raw_data, real_loop, vault_os))
 
     except WebSocketDisconnect:
-        print("🔴 [断开连接] 前端 UI 已下线/关闭。")
+        print(" [断开连接] 前端 UI 已下线/关闭。")
         consumer_task.cancel() # 安全清理消费者协程
     except Exception as e:
-        print(f"🔴 [网关异常] 通信循环崩溃: {str(e)}")
+        print(f" [网关异常] 通信循环崩溃: {str(e)}")
         consumer_task.cancel()
 # 2. 动态扫描并挂载第三方后端 API
 def mount_vpm_plugins():
@@ -264,12 +280,12 @@ def mount_vpm_plugins():
                         prefix=f"/api/plugins/{plugin_name}", 
                         tags=[f"Plugin: {plugin_name}"]
                     )
-                    print(f"✅ [VPM 内核] 成功挂载插件后端路由: /api/plugins/{plugin_name}")
+                    print(f" [VPM 内核] 成功挂载插件后端路由: /api/plugins/{plugin_name}")
                     
             except Exception as e:
-                print(f"🚨 [VPM 内核] 挂载插件 {plugin_name} 失败: {e}")
+                print(f" [VPM 内核] 挂载插件 {plugin_name} 失败: {e}")
 mount_vpm_plugins()
 init_db()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, log_level="warning")
