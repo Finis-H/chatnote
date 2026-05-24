@@ -55,6 +55,12 @@ let isAppDestroyed = false;
 let toastTimeout = null;
 let shakeTimeout = null;
 
+export function resolveMemoryConflict(id, decision) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "resolve_memory_conflict", id, decision }));
+  }
+}
+
 export function useNeuroLink() {
 
   function showToast(msg) {
@@ -293,6 +299,6 @@ export function useNeuroLink() {
 
   return { 
     connectWebSocket, destroyLink, sendChatCommand, switchView, openNote, 
-    confirmDelete, saveSystemConfig, confirmImport, showToast, sendWsCommand
+    confirmDelete, saveSystemConfig, confirmImport, showToast, sendWsCommand, resolveMemoryConflict
   };
 }

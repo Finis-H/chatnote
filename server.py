@@ -57,7 +57,7 @@ def get_free_port(start_port=8000):
 SERVER_PORT = get_free_port()
 SECURITY_TOKEN = secrets.token_hex(16)
 
-os.makedirs("vault", exist_ok=True)
+os.makedirs(VAULT_ROOT, exist_ok=True)
 with open(os.path.join(VAULT_ROOT, ".run_token"), "w", encoding="utf-8") as f:
     f.write(SECURITY_TOKEN)
 with open(os.path.join(VAULT_ROOT, ".server_port"), "w", encoding="utf-8") as f:
@@ -159,6 +159,19 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                         await websocket.send_json({"type": "memory_data", "content": json.load(f).get("queue", [])})
                 except Exception:
                     await websocket.send_json({"type": "memory_data", "content": []})
+            elif cmd_type == "resolve_memory_conflict":
+                result = await asyncio.to_thread(
+                    vault_os.resolve_memory_conflict,
+                    request.get("id"),
+                    request.get("decision")
+                )
+                await event_bus.publish({"type": "system_toast", "content": result.get("message", "")})
+                try:
+                    pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
+                    with open(pending_path, "r", encoding="utf-8") as f:
+                        await event_bus.publish({"type": "memory_data", "content": json.load(f).get("queue", [])})
+                except Exception:
+                    await event_bus.publish({"type": "memory_data", "content": []})
             # VPM 雷达扫描指令
             elif cmd_type == "fetch_plugins":
                 plugins_info = []
@@ -288,4 +301,11 @@ mount_vpm_plugins()
 init_db()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, log_level="warning")
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=SERVER_PORT,
+        log_level="warning",
+        log_config=None,
+        access_log=False,
+    )

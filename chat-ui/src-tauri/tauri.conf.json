@@ -41,12 +41,9 @@
     "externalBin": [
       "bin/vault_engine"
     ],
-    "resources": {
-      "../../vault/": "vault/"
-    },
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "both"
       }
     }
   }

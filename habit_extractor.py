@@ -2,6 +2,8 @@ import os
 import json
 from main import VAULT_ROOT
 import time
+import uuid
+import re
 
 class HabitExtractor:    
     def __init__(self):
@@ -10,44 +12,56 @@ class HabitExtractor:
         os.makedirs(self.fragments_dir, exist_ok=True)
 
     def analyze_input(self, user_input: str, llm_caller, chat_history=None):
-        """静默扫描并生成 JSON 碎片"""
+        """静默路由用户输入，生成最小记忆指针"""
+        question_pattern = r"(\?|？|什么|谁|哪|哪里|多少|为什么|怎么|如何|吗|呢|推荐|建议|送.*礼物|买什么|购买|选择|选什么|去哪|吃什么)"
+        if re.search(question_pattern, user_input or ""):
+            print("🕵️ [记忆 Router] 检测到查询语句，跳过画像写入。")
+            return
         # 1. 提取近期上下文（防代词指代丢失）
         context_str = "暂无近期对话上下文"
         if chat_history and isinstance(chat_history, list):
             # 取最后 4 条（即最近的两轮对话）
             recent_msgs = chat_history[-4:]
             context_str = "\n".join([f"[{m.get('role', 'UNKNOWN').upper()}]: {m.get('content', '')}" for m in recent_msgs])
-        # 极客风：给大模型下达不容置疑的 JSON 指令
         system_prompt = f"""
-        你是 Vault OS 的前哨潜意识捕捉器 (Scout)。
-        你的唯一任务是判断用户的输入中，是否包含需要被长期记忆的【高价值情报】。
+        你是 Vault OS 的记忆 Router。
+        你的唯一任务是阅读用户当前输入，判断它是否包含需要写入本地长期记忆的事实。
+        你只做语义路由，不决定文件路径，不读取任何本地文件。
+        只能从【当前用户输入】提取新记忆；下方历史上下文只允许用于代词消解，绝不能把历史消息或 assistant 回复当作新事实写入。
 
         【当前对话上下文（非常重要！用于推断代词如"她"、"这"的意思）】：
         {context_str}
 
-        【高价值情报必须包含以下三类之一】：
-        1. 物理事实与习惯 (Type 1)：主人的客观事实、生活偏好（如喜欢吃什么、住在哪里）。
-        2. 实体情报 (Type 1)：主人社交圈/身边实体的喜好与事实（如家人、老板、朋友）。
-        3. 认知与状态 (Type 2) 🚨最高优先级：主人当前正在使用的【技术栈】、涉及的【业务领域】、遇到的【技术卡点】、技能【熟练度】或【项目进度】（例如：“我在用 Tauri 设计前端”、“我遇到一个跨域报错”、“我对这个不太熟”）。
+        【合法 action】：
+        1. IGNORE：寒暄、提问、查询、命令、瞬时交互，没有长期记忆价值。
+        2. SELF_PROFILE_UPDATE：Boss 自身的客观事实、偏好、沟通方式、编程习惯。
+        3. ENTITY_UPDATE：Boss 身边其他人或实体的事实与偏好。
+        4. COGNITIVE_UPDATE：Boss 当前技术栈、项目状态、领域理解、卡点、熟练度或洞察。
 
-        【裁决逻辑】：
-        - 只要包含上述任何一类信息（即使是一句抱怨中带了技术栈，如“Tauri 的 UI 真难写”），都必须输出 EXTRACT 指令！
-        - 只有当输入是纯粹的寒暄、毫无信息量的纯提问（如“你好”、“这怎么办”），且结合上下文也提炼不出任何用户状态时，才输出：{{"action": "IGNORE"}}
+        【输出 Schema】：
+        - 无记忆价值：{{"action": "IGNORE"}}
+        - Boss 自身画像：{{"action": "SELF_PROFILE_UPDATE", "trait": "完整事实", "category": "facts|interests|communication|coding_style"}}
+        - 他人实体画像：{{"action": "ENTITY_UPDATE", "entity": "标准称呼", "trait": "完整事实"}}
+        - 认知图谱：{{"action": "COGNITIVE_UPDATE", "domain": "领域名", "new_cognition": {{"current_bottlenecks": [], "mental_model": "", "actionable_insight": ""}}}}
 
-        【EXTRACT 输出格式】（必须是纯 JSON，注意双花括号转义）：
-        {{
-            "action": "EXTRACT",
-            "category": "facts",
-            "new_trait": "提取出的完整陈述（必须消除代词并补全上下文！例如把'我在用它'还原为'用户正在使用 Tauri 设计前端，并感觉 UI 不够漂亮'）",
-            "evidence": "用户的原话"
-        }}
+        【强制规则】：
+        - 必须输出合法纯 JSON，禁止解释文字。
+        - “我父亲喜欢吃西瓜”是 ENTITY_UPDATE，entity 是“父亲”。
+        - “我喜欢吃西瓜”是 SELF_PROFILE_UPDATE。
+        - “帮我查天气”“我父亲喜欢什么水果？”必须 IGNORE。
+        - “Tauri 的 UI 真难写，我卡在窗口通信上”是 COGNITIVE_UPDATE。
+        - 一句话包含多条事实时，输出 JSON 数组。
         """
         try:
             # 统一参数名，调用外部传入的大模型执行器
             result_json = llm_caller(system_prompt, user_input)
             
-            # 如果成功抓取到特质，物理落地
-            if result_json and result_json.get("action") == "EXTRACT":
+            # 如果成功抓取到记忆指针，物理落地
+            if isinstance(result_json, list):
+                for item in result_json:
+                    if isinstance(item, dict) and item.get("action") != "IGNORE":
+                        self._save_fragment(item)
+            elif result_json and result_json.get("action") != "IGNORE":
                 self._save_fragment(result_json)
         except Exception as e:
             print(f"🕵️ [暗影守护者] 分析异常: {e}")
@@ -55,7 +69,7 @@ class HabitExtractor:
     def _save_fragment(self, data):
         """将提取到的 JSON 碎片落地到硬盘，等待审计"""
         timestamp = int(time.time() * 1000)
-        file_path = os.path.join(self.fragments_dir, f"trait_{timestamp}.json")
+        file_path = os.path.join(self.fragments_dir, f"trait_{timestamp}_{uuid.uuid4().hex[:8]}.json")
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)

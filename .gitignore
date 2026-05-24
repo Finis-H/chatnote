@@ -16,6 +16,7 @@ env/
 .env.*
 *.secret.json
 system_config.json
+!vault_seed/system_config.json
 
 # 运行日志
 *.log
@@ -32,12 +33,12 @@ build/
 
 # Tauri/Rust 编译产物 (这个文件夹会非常大，必须忽略)
 src-tauri/target/
+src-tauri/bin/
+chat-ui/src-tauri/bin/
 # 如果不需要追踪 Rust 的锁文件也可以取消下面这行的注释
 # src-tauri/Cargo.lock 
 
-# =========================
 # 3. 动态生成的资料与数据存储
-# =========================
 # 替换为你的“后端生成的资料文件夹”的实际名称
 # (例如：如果文件夹叫 output_data，就写 output_data/)
 # vault/
@@ -54,6 +55,7 @@ vault_tasks.json
 *.db
 chroma_db/
 faiss_index/
+.codex/
 
 # 临时生成的文档或媒体文件
 *.md.tmp
@@ -98,6 +100,9 @@ vault/habits.json
 vault/pending_memory.json
 vault/.run_token
 vault/shadow/
+vault/test_sandbox/
+tests/
+vault_seed/
 
 # 3. 忽略外部拉取的知识碎片，但保留文件夹结构
 vault/knowledge/inbox/*

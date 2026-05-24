@@ -6,7 +6,7 @@ def init_vault():
     # 1. 定义物理目录结构
     directories = [
         os.path.join(VAULT_ROOT, "core"),           # Layer 3: 核心基岩 (digital_twin.json)
-        os.path.join(VAULT_ROOT, "entities"),       # Layer 3: 外部实体画像
+        os.path.join(VAULT_ROOT, "knowledge", "entities"), # Layer 3: 外部实体画像
         os.path.join(VAULT_ROOT, "shadow"),         # Layer 2: 观察沙盒
         os.path.join(VAULT_ROOT, "knowledge/inbox"),# Layer 1: 原始输入/抓取
         os.path.join(VAULT_ROOT, "knowledge/archives"), # 经过融合的知识

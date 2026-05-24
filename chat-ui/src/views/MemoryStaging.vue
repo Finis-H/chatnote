@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { pendingMemory, pendingCount, memoryFilter } from '../composables/useNeuroLink';
+import { pendingMemory, pendingCount, memoryFilter, resolveMemoryConflict } from '../composables/useNeuroLink';
 
 const displayMemory = computed(() => {
   let list = [...pendingMemory.value];
@@ -58,7 +58,11 @@ function formatExpireTime(isoString) { return new Date(isoString).toLocaleString
           <div class="new-trait">{{ mem.new_trait }}</div>
         </div>
         <div class="card-footer" v-if="mem.status === 'PENDING'">
-          ⏳ 倒计时: <span class="countdown">{{ formatExpireTime(mem.expires_at) }}</span>
+          <div>⏳ 倒计时: <span class="countdown">{{ formatExpireTime(mem.expires_at) }}</span></div>
+          <div class="decision-actions" v-if="mem.type === 'CONFLICT'">
+            <button class="decision-btn accept" @click="resolveMemoryConflict(mem.id, 'accept')">是</button>
+            <button class="decision-btn reject" @click="resolveMemoryConflict(mem.id, 'reject')">否</button>
+          </div>
         </div> 
       </div>
     </div>
@@ -97,4 +101,9 @@ function formatExpireTime(isoString) { return new Date(isoString).toLocaleString
 .new-trait { color: #fff; font-size: 15px; line-height: 1.5; }
 .card-footer { margin-top: 15px; padding-top: 10px; border-top: 1px solid #333; font-size: 12px; color: #888; }
 .countdown { color: #ff4d4f; font-weight: bold; font-family: 'Consolas'; }
+.decision-actions { display: flex; gap: 8px; margin-top: 10px; }
+.decision-btn { border: 1px solid #444; background: rgba(255,255,255,0.05); color: #ddd; padding: 5px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+.decision-btn.accept { border-color: rgba(0, 255, 204, 0.45); color: #00ffcc; }
+.decision-btn.reject { border-color: rgba(255, 77, 79, 0.45); color: #ff4d4f; }
+.decision-btn:hover { background: rgba(255,255,255,0.12); }
 </style>

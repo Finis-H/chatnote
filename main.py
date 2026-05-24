@@ -12,6 +12,13 @@ import re
 import concurrent.futures
 from datetime import datetime
 
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
 def get_vault_root():
     # 工业级路径寻址：全系统唯一的“绝对真理”
     if getattr(sys, 'frozen', False):
@@ -21,7 +28,29 @@ def get_vault_root():
         # 开发环境：以当前 main.py 文件所在目录为基准
         base_dir = os.path.dirname(os.path.abspath(__file__))
         
-    prod_vault_path = os.path.join(base_dir, "vault")
+    prod_vault_path = os.environ.get("VAULT_ROOT") or os.path.join(base_dir, "vault")
+    seed_candidates = [
+        os.path.join(base_dir, "vault_seed"),
+        os.path.join(getattr(sys, "_MEIPASS", base_dir), "vault_seed"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "vault_seed"),
+    ]
+
+    if not os.path.exists(prod_vault_path) or not os.listdir(prod_vault_path):
+        os.makedirs(prod_vault_path, exist_ok=True)
+        for seed_path in seed_candidates:
+            if os.path.isdir(seed_path):
+                print(f" [Vault Seed] Initializing clean vault from: {seed_path}")
+                for item_name in os.listdir(seed_path):
+                    source = os.path.join(seed_path, item_name)
+                    target = os.path.join(prod_vault_path, item_name)
+                    if os.path.exists(target):
+                        continue
+                    if os.path.isdir(source):
+                        shutil.copytree(source, target)
+                    else:
+                        shutil.copy2(source, target)
+                break
+
     os.makedirs(prod_vault_path, exist_ok=True)
     return prod_vault_path
 
@@ -190,6 +219,167 @@ class VaultOS_Terminal:
         with open(self.blackbox_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
+    def _extract_profile_value(self, traits, patterns):
+        for trait in traits:
+            trait_text = str(trait)
+            for pattern in patterns:
+                match = re.search(pattern, trait_text, flags=re.IGNORECASE)
+                if match:
+                    return match.group(1)
+        return None
+
+    def _read_entity_profile_text(self, entity_name):
+        entity_path = None
+        if hasattr(self, "gatekeeper") and hasattr(self.gatekeeper, "get_entity_path"):
+            entity_path = self.gatekeeper.get_entity_path(entity_name)
+        if not entity_path:
+            entity_path = os.path.join(VAULT_ROOT, "knowledge", "entities", f"{entity_name}.md")
+        if not os.path.exists(entity_path):
+            return ""
+        try:
+            with open(entity_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return ""
+
+    def _looks_like_recommendation_request(self, text):
+        text = str(text or "")
+        return bool(re.search(r"(推荐|建议|适合|送|礼物|买|购买|选|选择|吃饭|吃什么|去哪|旅行|旅游|安排)", text))
+
+    def _build_memory_prefetch_context(self, user_input):
+        """回答前按需读取本地画像与相关实体，避免全量实体泄漏。"""
+        context_parts = []
+        loaded_entities = []
+        is_recommendation = self._looks_like_recommendation_request(user_input)
+
+        if is_recommendation:
+            try:
+                with open(self.gatekeeper.profile_path, "r", encoding="utf-8") as f:
+                    profile_data = json.load(f)
+                if profile_data:
+                    context_parts.append(
+                        "【回答前本地画像预读 - Boss】\n"
+                        "以下画像只用于理解 Boss 的预算倾向、表达偏好和决策风格；"
+                        "如果问题对象是他人，禁止把 Boss 的个人偏好套用给该实体。\n"
+                        f"{json.dumps(profile_data, ensure_ascii=False)}"
+                    )
+            except Exception as e:
+                print(f" [记忆预读] Boss 画像读取异常: {e}")
+
+        try:
+            if hasattr(self.gatekeeper, "resolve_entities"):
+                matched_entities = self.gatekeeper.resolve_entities(user_input)
+            else:
+                matched_entities = []
+            for entity_name in matched_entities:
+                content = self._read_entity_profile_text(entity_name)
+                if content:
+                    context_parts.append(
+                        f"【实体专属事实源 - {entity_name}】\n"
+                        f"以下内容是回答“{entity_name}”相关问题的最高优先级事实源。"
+                        "如果用户询问该实体，只能依据本档案回答；档案没有记录时，必须说本地实体档案暂无记录，禁止套用 Boss 自己的画像或模型常识。\n"
+                        f"{content}"
+                    )
+                else:
+                    context_parts.append(
+                        f"【实体专属事实源 - {entity_name}】\n"
+                        "本地实体档案暂无记录。回答该实体问题时，禁止套用 Boss 自己的画像或模型常识。"
+                    )
+                loaded_entities.append(entity_name)
+        except Exception as e:
+            print(f" [记忆预读] 实体档案读取异常: {e}")
+
+        if loaded_entities:
+            print(f" [记忆预读] 已挂载相关实体档案: {', '.join(loaded_entities)}")
+        elif is_recommendation:
+            print(" [记忆预读] 已挂载 Boss 画像用于建议类问题。")
+
+        return "\n\n".join(context_parts)
+
+    def _detect_local_profile_query(self, user_input):
+        text = str(user_input or "")
+        if not re.search(r"(\?|？|什么|谁|哪|哪里|多少|为什么|怎么|如何|吗|呢)", text):
+            return None
+
+        target = "Boss"
+        if hasattr(self, "gatekeeper"):
+            for canonical, aliases in self.gatekeeper.ENTITY_ALIASES.items():
+                if canonical in text or any(alias in text for alias in aliases):
+                    target = canonical
+                    break
+
+        if re.search(r"(名字|姓名|叫什么|叫啥|我是谁)", text):
+            return {"target": target, "slot": "name"}
+        if "水果" in text or "吃什么" in text:
+            return {"target": target, "slot": "fruit"}
+        if "动物" in text:
+            return {"target": target, "slot": "animal"}
+        if "编程语言" in text:
+            return {"target": target, "slot": "programming_language"}
+        if "交通方式" in text or "出行" in text:
+            return {"target": target, "slot": "transport"}
+        return None
+
+    def _answer_local_profile_query(self, query):
+        target = query.get("target")
+        slot = query.get("slot")
+        if target != "Boss":
+            content = self._read_entity_profile_text(target)
+            if not content:
+                return f"本地实体档案暂无记录：{target}。"
+            patterns = {
+                "fruit": [r"(?:喜欢吃|爱吃)([\u4e00-\u9fffA-Za-z0-9、和]+)"],
+                "name": [r"(?:名字|姓名|叫)(?:是|为)?([\u4e00-\u9fffA-Za-z0-9·.\-]+)"],
+            }.get(slot, [])
+            value = self._extract_profile_value([content], patterns)
+            if not value:
+                return f"本地实体档案暂无记录：{target}。"
+            if slot == "fruit":
+                return f"您的{target}喜欢吃{value}。"
+            if slot == "name":
+                return f"{target}的名字是{value}。"
+            return f"本地实体档案暂无记录：{target}。"
+
+        try:
+            with open(self.gatekeeper.profile_path, "r", encoding="utf-8") as f:
+                profile = json.load(f)
+        except Exception:
+            profile = {}
+        interests = profile.get("interests", []) if isinstance(profile, dict) else []
+        facts = profile.get("facts", []) if isinstance(profile, dict) else []
+        coding_style = profile.get("coding_style", []) if isinstance(profile, dict) else []
+
+        if slot == "fruit":
+            value = self._extract_profile_value(interests, [
+                r"最爱吃的水果是([\u4e00-\u9fffA-Za-z0-9、和]+)",
+                r"最喜欢吃的水果是([\u4e00-\u9fffA-Za-z0-9、和]+)",
+                r"最喜欢的水果是([\u4e00-\u9fffA-Za-z0-9、和]+)",
+                r"喜欢吃([\u4e00-\u9fffA-Za-z0-9、和]+)",
+            ])
+            return f"您最喜欢吃的水果是{value}。" if value else "本地画像暂无记录：喜欢吃什么水果。"
+        if slot == "name":
+            value = self._extract_profile_value(facts, [
+                r"(?:用户的名字是|真实姓名是|名字叫|姓名是)([\u4e00-\u9fffA-Za-z0-9·.\-]+)",
+            ])
+            return f"您的名字是{value}。" if value else "本地画像暂无记录：名字。"
+        if slot == "animal":
+            value = self._extract_profile_value(interests, [
+                r"最喜欢的动物是([\u4e00-\u9fffA-Za-z0-9、和]+)",
+            ])
+            return f"您最喜欢的动物是{value}。" if value else "本地画像暂无记录：喜欢什么动物。"
+        if slot == "programming_language":
+            value = self._extract_profile_value(coding_style + interests, [
+                r"喜欢使用([\u4e00-\u9fffA-Za-z0-9#+.、和]+)",
+                r"喜欢([\u4e00-\u9fffA-Za-z0-9#+.、和]+)",
+            ])
+            return f"您喜欢的编程语言是{value}。" if value else "本地画像暂无记录：喜欢什么编程语言。"
+        if slot == "transport":
+            value = self._extract_profile_value(interests, [
+                r"(?:出行喜欢|喜欢)(乘坐[\u4e00-\u9fffA-Za-z0-9、和]+出行|乘坐[\u4e00-\u9fffA-Za-z0-9、和]+)",
+            ])
+            return f"您出行喜欢{value}。" if value else "本地画像暂无记录：喜欢什么交通方式。"
+        return None
+
     def get_response(self, user_input: str, thread_id: str = "global", display_message: str = None) -> str:
         if not self.llm_config.get("api_key"):
             return " [系统提醒] 核心引擎尚未激活。请前往「引擎设置」配置您的 API Key。"
@@ -198,29 +388,46 @@ class VaultOS_Terminal:
         try:
             print(f" [收到指令] 正在思考: {display_message} (线程: {thread_id})")   
             if display_message.lower() == '/audit':
-                self.gatekeeper.check_and_promote(
-                    llm_caller=self._call_llm_json, 
-                    entity_callback=self._update_entity_file
-                )
+                with self.gatekeeper.memory_lock:
+                    self.gatekeeper.check_and_promote(
+                        llm_caller=self._call_llm_json,
+                        entity_callback=self._update_entity_file
+                    )
                 return " [系统动作] 审计完毕：暗影碎片已完成提纯与画像晋升。"
+
+            local_profile_query = self._detect_local_profile_query(display_message)
+            if local_profile_query:
+                answer = self._answer_local_profile_query(local_profile_query)
+                if answer:
+                    print(" [本地画像查询] 已由 Python 确定性读取返回，跳过记忆写入与主模型推理。")
+                    self.threads.setdefault(thread_id, [])
+                    self.threads[thread_id].append({'role': 'user', 'content': display_message})
+                    self.threads[thread_id].append({'role': 'assistant', 'content': answer})
+                    self._save_to_disk()
+                    self._write_to_blackbox(f"{thread_id}_boss", display_message)
+                    self._write_to_blackbox(f"{thread_id}_butler", answer)
+                    return answer
                 
             print(" [暗影守护者] 正在扫描用户输入提取习惯...")
             def _shadow_pipeline():
-                current_history = self.threads.get(thread_id, [])
+                current_history = self.threads.get(thread_id, []).copy()
                 caller_with_memory = lambda p, u: self._mock_llm_for_extractor(p, u, chat_history=current_history)
                 
-                self.extractor.analyze_input(display_message, caller_with_memory, chat_history=current_history)
-                self.gatekeeper.check_and_promote(
-                    llm_caller=self._call_llm_json, 
-                    entity_callback=self._update_entity_file
-                )
+                with self.gatekeeper.memory_lock:
+                    self.extractor.analyze_input(display_message, caller_with_memory, chat_history=current_history)
+                    self.gatekeeper.check_and_promote(
+                        llm_caller=self._call_llm_json,
+                        entity_callback=self._update_entity_file
+                    )
             threading.Thread(target=_shadow_pipeline).start()
 
-            blueprint = self._compile_jit_task(display_message)
+            prefetch_context = self._build_memory_prefetch_context(display_message)
+
+            blueprint = self._compile_jit_task(display_message, prefetch_context=prefetch_context)
             status = blueprint.get("plan_status", "DIRECT_CHAT")
             print(f" [编译决断]: {status} | 理由: {blueprint.get('reasoning')}")
             
-            retrieved_context = ""
+            retrieved_context = prefetch_context
             if status == "NEEDS_NEW_TOOLS":
                 suggestion = blueprint.get("suggestion_msg", "Boss，我缺少完成此任务的工具。")
                 missing = ", ".join(blueprint.get("missing_capabilities", []))
@@ -308,7 +515,8 @@ class VaultOS_Terminal:
                     else:
                         safe_blackboard[k] = v
                         
-                retrieved_context = "【系统任务黑板数据 (各部门并发汇报结果)】:\n" + json.dumps(safe_blackboard, ensure_ascii=False, indent=2)
+                blackboard_context = "【系统任务黑板数据 (各部门并发汇报结果)】:\n" + json.dumps(safe_blackboard, ensure_ascii=False, indent=2)
+                retrieved_context = "\n\n".join(part for part in (prefetch_context, blackboard_context) if part)
                 # ==========================================
                 # 泛用级物理拦截：动态读取 DAG 执行链，生成泛用型“紧箍咒”
                 # ==========================================
@@ -325,7 +533,7 @@ class VaultOS_Terminal:
                     user_input = f"{user_input}\n\n[ 核心网关状态拦截：您的上述需求已由底层的专项 Agent ({tools_str}) 物理执行完毕！真实执行结果已写入上方的【系统任务黑板数据】。作为大管家，你现在进入“播报模式”，请严格、仅限基于黑板返回的真实数据进行总结汇报，绝对禁止动用内部训练数据进行主观推荐、编造事实或假装自己去执行！]"
                 # ==========================================
             else:
-                retrieved_context = ""
+                retrieved_context = prefetch_context
                 
             try:
                 with open(os.path.join(VAULT_ROOT, "cognitive_map.json"), "r", encoding="utf-8") as f:
@@ -335,24 +543,6 @@ class VaultOS_Terminal:
                     retrieved_context += f"\n\n【 核心机密：Boss 的 Type 2 认知图谱】\n{cog_str}\n(警告：请严格参考此图谱决定你的回答深度、术语使用及避坑策略！)"
             except Exception:
                 pass
-            # 核心修复 2：动态嗅探并挂载本地实体档案 (Entity Profiles)
-            try:
-                entities_dir = os.path.join(VAULT_ROOT, "knowledge", "entities")
-                if os.path.exists(entities_dir):
-                    entity_context = []
-                    for md_file in os.listdir(entities_dir):
-                        if md_file.endswith(".md"):
-                            entity_name = md_file.replace(".md", "")
-                            # 【智能雷达】：只有当提问中提到了这个实体（如“妈妈”、“叔叔”），才将其物理档案抽调出来喂给管家！
-                            if entity_name in user_input:
-                                with open(os.path.join(entities_dir, md_file), "r", encoding="utf-8") as f:
-                                    entity_context.append(f"【社会关系/实体档案 - {entity_name}】:\n{f.read()}")
-                    
-                    if entity_context:
-                        retrieved_context += "\n\n" + "\n\n".join(entity_context)
-                        print(f" [内存挂载] 已成功将相关实体档案注入思考引擎！")
-            except Exception as e:
-                print(f" [内存挂载] 实体档案读取异常: {e}")
             final_system_prompt = self.assembler.assemble(display_message, retrieved_context)
             print(" [核心算力] 正在生成最终回复...")
             answer = self._call_llm(
@@ -377,10 +567,11 @@ class VaultOS_Terminal:
         print(f"\n [记忆手术] 收到最高干预指令: {user_command}")
         self._write_to_blackbox("memory_surgery_boss", user_command)
         try:
-            with open(self.gatekeeper.pending_path, 'r', encoding='utf-8') as f:
-                pending = json.load(f)
-            with open(self.gatekeeper.profile_path, 'r', encoding='utf-8') as f:
-                profile = json.load(f)
+            with self.gatekeeper.memory_lock:
+                with open(self.gatekeeper.pending_path, 'r', encoding='utf-8') as f:
+                    pending = json.load(f)
+                with open(self.gatekeeper.profile_path, 'r', encoding='utf-8') as f:
+                    profile = json.load(f)
         except Exception as e:
             return f" 无法读取脑区数据: {e}"
         prompt = f"""
@@ -409,10 +600,11 @@ class VaultOS_Terminal:
             result_json = self._parse_json_robust(content)
             
             if result_json and "updated_queue" in result_json:
-                with open(self.gatekeeper.pending_path, 'w', encoding='utf-8') as f:
-                    json.dump({"queue": result_json["updated_queue"]}, f, ensure_ascii=False, indent=2)
-                with open(self.gatekeeper.profile_path, 'w', encoding='utf-8') as f:
-                    json.dump(result_json["updated_profile"], f, ensure_ascii=False, indent=2)   
+                with self.gatekeeper.memory_lock:
+                    with open(self.gatekeeper.pending_path, 'w', encoding='utf-8') as f:
+                        json.dump({"queue": result_json["updated_queue"]}, f, ensure_ascii=False, indent=2)
+                    with open(self.gatekeeper.profile_path, 'w', encoding='utf-8') as f:
+                        json.dump(result_json["updated_profile"], f, ensure_ascii=False, indent=2)
                 print(f" [记忆手术] 成功: {result_json.get('reply')}")
                 return result_json.get("reply", "神经链路重塑完毕。")
             else:
@@ -420,57 +612,126 @@ class VaultOS_Terminal:
         except Exception as e:
             print(f" [记忆手术] 致命错误: {e}")
             return " 脑区链接断开，手术失败。"
+
+    def resolve_memory_conflict(self, memory_id, decision):
+        """确定性处理单条待决冲突，避免简单同意/拒绝走大模型手术。"""
+        if decision not in {"accept", "reject"}:
+            return {"ok": False, "message": " 冲突处理失败：未知裁决动作。"}
+        if not memory_id:
+            return {"ok": False, "message": " 冲突处理失败：缺少记忆 ID。"}
+
+        try:
+            with self.gatekeeper.memory_lock:
+                with open(self.gatekeeper.pending_path, 'r', encoding='utf-8') as f:
+                    pending_data = json.load(f)
+                queue = pending_data.get("queue", []) if isinstance(pending_data, dict) else pending_data
+                if not isinstance(queue, list):
+                    queue = []
+
+                target = next((item for item in queue if item.get("id") == memory_id), None)
+                if not target:
+                    return {"ok": False, "message": " 冲突处理失败：找不到对应记忆。"}
+                if target.get("status") != "PENDING" or target.get("type") != "CONFLICT":
+                    return {"ok": False, "message": " 冲突处理失败：该记忆不是待决冲突。"}
+
+                if decision == "accept":
+                    category = target.get("category")
+                    old_trait = target.get("old_trait")
+                    new_trait = target.get("new_trait")
+                    with open(self.gatekeeper.profile_path, 'r', encoding='utf-8') as f:
+                        profile = json.load(f)
+                    if not isinstance(profile, dict) or not isinstance(profile.get(category), list):
+                        return {"ok": False, "message": " 冲突处理失败：画像分类不存在或格式异常。"}
+                    if old_trait in profile[category]:
+                        profile[category].remove(old_trait)
+                    if new_trait and new_trait not in profile[category]:
+                        profile[category].append(new_trait)
+                    target["status"] = "MERGED"
+                    with open(self.gatekeeper.profile_path, 'w', encoding='utf-8') as f:
+                        json.dump(profile, f, ensure_ascii=False, indent=2)
+                    event_type = "FAST_CONFLICT_ACCEPTED"
+                    message = " 已同意修改：新记忆已写入。"
+                else:
+                    target["status"] = "REJECTED"
+                    event_type = "FAST_CONFLICT_REJECTED"
+                    message = " 已拒绝修改：旧记忆已保留。"
+
+                with open(self.gatekeeper.pending_path, 'w', encoding='utf-8') as f:
+                    json.dump({"queue": queue}, f, ensure_ascii=False, indent=2)
+                self.gatekeeper._write_blackbox(event_type, target)
+                return {"ok": True, "message": message, "queue": queue}
+        except Exception as e:
+            print(f" [记忆快裁] 处理失败: {e}")
+            return {"ok": False, "message": f" 冲突处理失败：{e}"}
     
     def _update_entity_file(self, entity_name, new_trait):
+        if not new_trait:
+            return
+        if hasattr(self, "gatekeeper") and hasattr(self.gatekeeper, "sanitize_entity_name"):
+            entity_name = self.gatekeeper.sanitize_entity_name(entity_name)
+        if not entity_name or entity_name == "Boss":
+            print(f" [实体防线] 已拦截非法实体档案目标: {entity_name}")
+            return
         entity_dir = os.path.join(VAULT_ROOT, "knowledge", "entities")
         os.makedirs(entity_dir, exist_ok=True)
         file_path = os.path.join(entity_dir, f"{entity_name}.md")
-        final_content = "" 
+        lock = getattr(getattr(self, "gatekeeper", None), "memory_lock", threading.RLock())
         
-        if not os.path.exists(file_path):
-            final_content = f"---\ntitle: {entity_name} 的核心画像\ncategory: EntityProfile\n---\n\n## 基础情报\n- {new_trait}\n"
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(final_content)
-            print(f" [实体档案] 已为 {entity_name} 建立初始卷宗。")
-        else:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    old_content = f.read()
-                    
-                # 【架构升级】：引入高强度语义排他性检测的合并器 Prompt
-                prompt = f"""
-                你是 Vault OS 的专属档案整理专家。
-                你需要将新收集到的碎片情报，无缝且合乎逻辑地融入该实体的现有 Markdown 档案中。
-                
-                【实体名称】：{entity_name}
-                【现有档案内容】：
-                {old_content}
-
-                【需要合入的新情报】："{new_trait}"
-
-                【最高修改法则】：
-                1. 语义排他性检测（冲突覆盖）：仔细对比新情报与现有情报。如果新情报与旧情报属于“互斥”或“同类属性更替”（例如：原本喜欢苹果，现在说喜欢哈密瓜；或者原本住北京，现在住上海），你必须【物理抹除】旧的属性记录，只保留新情报！绝对禁止出现“既喜欢苹果又喜欢哈密瓜”的自相矛盾罗列。
-                2. 知识增量（补充追加）：只有当新情报是一个完全不相关的全新维度（比如原来只记录了职业，新情报是爱好）时，才作为新的一行无序列表追加。
-                3. 格式洁癖：必须完整保留文件头部的 --- frontmatter --- 和所有 Markdown 标题结构，只精确修改正文的内容。
-                
-                请直接输出修改完毕的完整 Markdown 文本，绝不允许包含任何解释性文字或 ```markdown 标记。
-                """
-                
-                # 算力升级：从 model_mini 切换到 model_max，确保合并逻辑严密
-                response = self.client.chat.completions.create(
-                    model=self.llm_config.get("model_max", "qwen-max"),
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                
-                new_content = response.choices[0].message.content
-                # 增强型正则表达式：暴力剔除任何可能带有语言标识的代码块包装
-                new_content = re.sub(r'^```[a-zA-Z]*\n|```$', '', new_content.strip(), flags=re.MULTILINE)
-                
+        with lock:
+            if not os.path.exists(file_path):
+                final_content = f"---\ntitle: {entity_name} 的核心画像\ncategory: EntityProfile\n---\n\n## 基础情报\n- {new_trait}\n"
                 with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(new_content)
-                print(f" [实体档案] {entity_name} 的卷宗已完成深度清洗与覆写。")
-            except Exception as e:
-                print(f" 实体档案覆写失败: {e}")
+                    f.write(final_content)
+                if hasattr(self.gatekeeper, "refresh_entity_index"):
+                    self.gatekeeper.refresh_entity_index()
+                print(f" [实体档案] 已为 {entity_name} 建立初始卷宗。")
+            else:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        old_content = f.read()
+
+                    # 【架构升级】：引入高强度语义排他性检测的合并器 Prompt
+                    prompt = f"""
+                    你是 Vault OS 的专属档案整理专家。
+                    你需要将新收集到的碎片情报，无缝且合乎逻辑地融入该实体的现有 Markdown 档案中。
+
+                    【实体名称】：{entity_name}
+                    【现有档案内容】：
+                    {old_content}
+
+                    【需要合入的新情报】："{new_trait}"
+
+                    【最高修改法则】：
+                    1. 语义排他性检测（冲突覆盖）：仔细对比新情报与现有情报。如果新情报与旧情报属于“互斥”或“同类属性更替”（例如：原本喜欢苹果，现在说喜欢哈密瓜；或者原本住北京，现在住上海），你必须【物理抹除】旧的属性记录，只保留新情报！绝对禁止出现“既喜欢苹果又喜欢哈密瓜”的自相矛盾罗列。
+                    2. 知识增量（补充追加）：只有当新情报是一个完全不相关的全新维度（比如原来只记录了职业，新情报是爱好）时，才作为新的一行无序列表追加。
+                    3. 格式洁癖：必须完整保留文件头部的 --- frontmatter --- 和所有 Markdown 标题结构，只精确修改正文的内容。
+
+                    请直接输出修改完毕的完整 Markdown 文本，绝不允许包含任何解释性文字或 ```markdown 标记。
+                    """
+
+                    # 算力升级：从 model_mini 切换到 model_max，确保合并逻辑严密
+                    response = self.client.chat.completions.create(
+                        model=self.llm_config.get("model_max", "qwen-max"),
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+
+                    new_content = response.choices[0].message.content
+                    # 增强型正则表达式：暴力剔除任何可能带有语言标识的代码块包装
+                    new_content = re.sub(r'^```[a-zA-Z]*\n|```$', '', new_content.strip(), flags=re.MULTILINE)
+                    if not new_content:
+                        print(f" [实体档案] 模型返回空内容，已保护 {entity_name} 原档案不被覆盖。")
+                        return
+                    if not new_content.lstrip().startswith("---") or new_content.count("---") < 2:
+                        print(f" [实体档案] 模型输出缺少 frontmatter，已保护 {entity_name} 原档案不被覆盖。")
+                        return
+
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    if hasattr(self.gatekeeper, "refresh_entity_index"):
+                        self.gatekeeper.refresh_entity_index()
+                    print(f" [实体档案] {entity_name} 的卷宗已完成深度清洗与覆写。")
+                except Exception as e:
+                    print(f" 实体档案覆写失败: {e}")
 
     def _scan_md_folder(self, folder_pattern):
         items = []
@@ -549,6 +810,7 @@ class VaultOS_Terminal:
 你不是普通的聊天助手，你是基于上述【基岩画像】运行的专属管家。
 - 你在决定语气、代码风格、建议策略时，必须 100% 遵从基岩画像。
 - 如果短期对话的内容与基岩画像发生冲突，永远、绝对以【基岩画像】为准！
+- 但当系统提示中出现【实体专属事实源】且用户正在询问该实体时，实体档案是该实体问题的最高事实源；禁止把 Boss 自己的偏好迁移给该实体。
 """
         else:
             profile_strategy = """
@@ -625,7 +887,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
             print(f" [底层JSON脱壳异常]: {e}")
             return None
 
-    def _compile_jit_task(self, user_input: str) -> dict:
+    def _compile_jit_task(self, user_input: str, prefetch_context: str = "") -> dict:
         print(" [JIT 编译器] 正在为复杂任务绘制动态执行蓝图...")
         # 让 CEO (JIT编译器) 也拥有时间观念
         current_time_str = datetime.now().strftime("%Y年%m月%d日")
@@ -645,6 +907,9 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
         prompt = f"""
         你是 Vault OS 的 JIT 任务编译器 (CEO)。今天的时间是 {current_time_str}。
         主人的当前任务是: "{user_input}"
+
+        【回答前本地记忆预读】:
+        {prefetch_context if prefetch_context else "本轮没有命中需要预读的实体档案或建议类画像。"}
         
         【你当前可用的工具 (手下的总监) 及其参数说明】: 
         {json.dumps(tool_specs, ensure_ascii=False)}
@@ -656,6 +921,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
         第二步：如果主人明确下达了需要操作的指令（如播放音乐、查询网络、操控系统），才去匹配上方工具。
                - 如果有工具可以满足需求 -> 返回 "READY" 并规划 steps。
                - 如果没有任何工具能做到 -> 返回 "NEEDS_NEW_TOOLS"。
+               - 如果是推荐、送礼、购买、旅行、吃饭等建议类问题，且需要最新趋势、价格、新闻或时效信息，可以调用 web_search；但搜索只能补充候选，不能覆盖上方本地记忆预读。
 
         【强制输出 JSON 格式】：
         必须严格输出以下格式的 JSON，不要包含任何多余文字：
@@ -701,18 +967,21 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
         strict_prompt = prompt + """\n\n【系统最高防线】：
 1. 必须输出合法的纯 JSON 格式！绝不允许包含前言后语。
 2. 【行为与事实的物理隔离】：提问、查询、下达指令等瞬时交互，绝对没有记忆价值！必须强制输出 {"action": "IGNORE"}。只有陈述客观事实、喜好、纠错才允许提取。
-3. 【实体剥离与强制 Schema】(致命错误防范)：
-   必须且只能输出这三个核心字段："action", "entity", "trait"！绝对禁止输出 "new_trait" 或 "evidence"！
-   - 描述创造者本人：{"action": "EXTRACT", "entity": "Boss", "trait": "..."}
-   - 描述其他人或事物：{"action": "EXTRACT", "entity": "标准称呼", "trait": "..."}
+3. 【强制 Schema】action 必须是 IGNORE、SELF_PROFILE_UPDATE、ENTITY_UPDATE、COGNITIVE_UPDATE 之一。
+   - 描述创造者本人：{"action": "SELF_PROFILE_UPDATE", "category": "facts|interests|communication|coding_style", "trait": "..."}
+   - 描述其他人或事物：{"action": "ENTITY_UPDATE", "entity": "标准称呼", "trait": "..."}
+   - 描述技术栈、项目状态、领域卡点：{"action": "COGNITIVE_UPDATE", "domain": "领域名", "new_cognition": {"current_bottlenecks": [], "mental_model": "", "actionable_insight": ""}}
 
 【Few-Shot 标准输出示例】（必须严格照做）：
 === 正例：事实陈述与纠错 ===
 用户输入："我出行喜欢做飞机"
-输出：{"action": "EXTRACT", "entity": "Boss", "trait": "出行喜欢乘坐飞机"}
+输出：{"action": "SELF_PROFILE_UPDATE", "category": "interests", "trait": "出行喜欢乘坐飞机"}
 
 用户输入："不对，她喜欢吃哈密瓜"
-输出：{"action": "EXTRACT", "entity": "母亲", "trait": "喜欢吃哈密瓜"}
+输出：{"action": "ENTITY_UPDATE", "entity": "母亲", "trait": "喜欢吃哈密瓜"}
+
+用户输入："Tauri 的 UI 真难写，我卡在窗口通信上"
+输出：{"action": "COGNITIVE_UPDATE", "domain": "Tauri", "new_cognition": {"current_bottlenecks": ["窗口通信"], "mental_model": "Boss 正在处理 Tauri UI 与窗口通信问题", "actionable_insight": "回答时优先给出 Tauri v2 桌面端可落地方案"}}
 
 === 反例：提问与瞬时交互（极度重要，绝不允许提取！） ===
 用户输入："我父亲喜欢什么水果？"
@@ -722,11 +991,17 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
 输出：{"action": "IGNORE"}
 """
         
-        messages = [{'role': 'system', 'content': strict_prompt}]
+        strict_prompt += """
 
-        if chat_history and isinstance(chat_history, list):
-            messages.extend(chat_history[-4:])
-            
+【实体画像隔离补充规则】
+1. “我父亲喜欢吃西瓜”必须输出 {"action": "ENTITY_UPDATE", "entity": "父亲", "trait": "喜欢吃西瓜"}，绝不能写成 Boss/用户事实。
+2. “我喜欢吃西瓜”才允许输出 {"action": "SELF_PROFILE_UPDATE", "category": "interests", "trait": "喜欢吃西瓜"}。
+3. 如果一句话同时包含 Boss 和他人事实，输出 JSON 数组，分别给 Boss 与对应实体。
+4. “真实姓名/名字/我叫”属于 Boss 的高优先级单值身份事实；如果与历史姓名不同，后端会强制转为冲突等待确认。
+5. 只能从最后一条用户输入提取新事实；历史对话只用于理解“她/他/这个”等代词，绝不能把历史或 assistant 回复内容当作新记忆。
+"""
+
+        messages = [{'role': 'system', 'content': strict_prompt}]
         messages.append({'role': 'user', 'content': user_input})
         
         try:
@@ -739,7 +1014,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
             parsed = self._parse_json_robust(content) 
             if not parsed: return {"action": "IGNORE"} 
             if isinstance(parsed, list):
-                parsed = parsed[0] if parsed else {"action": "IGNORE"}
+                return parsed if parsed else {"action": "IGNORE"}
             return parsed
         except Exception as e:
             return {"action": "IGNORE"}
@@ -782,17 +1057,18 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
                     current_history = self.threads.get("global", [])
                     caller_with_memory = lambda p, u: self._mock_llm_for_extractor(p, u, chat_history=current_history)
                     
-                    self.extractor.analyze_input(user_input, caller_with_memory, chat_history=current_history)
-                    self.gatekeeper.check_and_promote(
-                        llm_caller=self._call_llm_json, 
-                        entity_callback=self._update_entity_file
-                    )
+                    with self.gatekeeper.memory_lock:
+                        self.extractor.analyze_input(user_input, caller_with_memory, chat_history=current_history)
+                        self.gatekeeper.check_and_promote(
+                            llm_caller=self._call_llm_json,
+                            entity_callback=self._update_entity_file
+                        )
                 threading.Thread(target=_shadow_pipeline_cli).start()
                 retrieved_context = ""
                 final_system_prompt = self.assembler.assemble(user_input, retrieved_context)
                 print(" [LLM 推理中...]")
                 answer = self._call_llm(final_system_prompt, user_input)
-                print(f"\ [Vault OS]:\n{answer}")
+                print(f"\n[Vault OS]:\n{answer}")
             except KeyboardInterrupt:
                 print("\n 检测到强制中断，Vault OS 进入休眠。")
                 break
@@ -831,6 +1107,15 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
         【输出要求】：必须输出 JSON 数组格式，每一项包含 type(固定为NEW), category, new_trait。
         例如：[{"type": "NEW", "category": "facts", "new_trait": "用户正在开发 AI Agent"}]
         """
+        seed_prompt += """
+
+【实体画像隔离规则】
+1. core_profile.json 只保存用户本人事实；父亲、母亲、朋友、老板等身边人的事实必须输出 ENTITY_UPDATE。
+2. “我父亲喜欢吃西瓜”输出 {"type": "ENTITY_UPDATE", "entity": "父亲", "new_trait": "喜欢吃西瓜"}。
+3. “我喜欢吃西瓜”输出 {"type": "NEW", "category": "interests", "new_trait": "喜欢吃西瓜"}。
+4. 如果文档同时包含用户本人和他人事实，输出数组，分别列出 NEW 与 ENTITY_UPDATE。
+5. “真实姓名/名字/我叫”属于用户本人高优先级单值身份事实；与已有姓名不同必须作为冲突处理，不能普通新增。
+"""
         try:
             response = self.client.chat.completions.create(
                 model=self.llm_config.get("model_mini", "qwen-turbo"),
@@ -841,9 +1126,24 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
             print(f" [画像提取器返回]: {content.strip()}")
             raw_traits = self._parse_json_robust(content)
             if raw_traits:
-                success = self.gatekeeper.inject_pending_memories(raw_traits)
+                if isinstance(raw_traits, dict):
+                    raw_traits = [raw_traits]
+                profile_traits = []
+                entity_count = 0
+                for trait in raw_traits:
+                    if not isinstance(trait, dict):
+                        continue
+                    if trait.get("type") == "ENTITY_UPDATE":
+                        entity_name = trait.get("entity")
+                        new_trait = trait.get("new_trait") or trait.get("trait")
+                        if entity_name and new_trait:
+                            self._update_entity_file(entity_name, new_trait)
+                            entity_count += 1
+                    else:
+                        profile_traits.append(trait)
+                success = self.gatekeeper.inject_pending_memories(profile_traits) if profile_traits else True
                 if success:
-                    return f"已成功从文档中提取出 {len(raw_traits)} 条记忆碎片。请前往「记忆同步」进行最后核准。"
+                    return f"已成功从文档中提取出 {len(profile_traits)} 条用户记忆碎片，并同步 {entity_count} 条实体画像。请前往「记忆同步」进行最后核准。"
             return "未能从文档中识别出有效的习惯或事实。"
         except Exception as e:
             return f"画像提取过程中发生异常: {str(e)}"
