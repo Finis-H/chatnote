@@ -1,22 +1,16 @@
-import os
-import json
-from main import VAULT_ROOT
-import time
-import uuid
 import re
 
 class HabitExtractor:    
     def __init__(self):
-        # 定义碎片存放目录，不再维护旧版的 habits.json
-        self.fragments_dir = os.path.join(VAULT_ROOT, "active_tasks")
-        os.makedirs(self.fragments_dir, exist_ok=True)
+        # v2 memory core no longer uses JSON fragment files.
+        pass
 
     def analyze_input(self, user_input: str, llm_caller, chat_history=None):
-        """静默路由用户输入，生成最小记忆指针"""
+        """静默路由用户输入，返回候选记忆事件。"""
         question_pattern = r"(\?|？|什么|谁|哪|哪里|多少|为什么|怎么|如何|吗|呢|推荐|建议|送.*礼物|买什么|购买|选择|选什么|去哪|吃什么)"
         if re.search(question_pattern, user_input or ""):
             print("🕵️ [记忆 Router] 检测到查询语句，跳过画像写入。")
-            return
+            return []
         # 1. 提取近期上下文（防代词指代丢失）
         context_str = "暂无近期对话上下文"
         if chat_history and isinstance(chat_history, list):
@@ -55,23 +49,11 @@ class HabitExtractor:
         try:
             # 统一参数名，调用外部传入的大模型执行器
             result_json = llm_caller(system_prompt, user_input)
-            
-            # 如果成功抓取到记忆指针，物理落地
             if isinstance(result_json, list):
-                for item in result_json:
-                    if isinstance(item, dict) and item.get("action") != "IGNORE":
-                        self._save_fragment(item)
-            elif result_json and result_json.get("action") != "IGNORE":
-                self._save_fragment(result_json)
+                return [item for item in result_json if isinstance(item, dict) and item.get("action") != "IGNORE"]
+            if isinstance(result_json, dict) and result_json.get("action") != "IGNORE":
+                return [result_json]
+            return []
         except Exception as e:
             print(f"🕵️ [暗影守护者] 分析异常: {e}")
-
-    def _save_fragment(self, data):
-        """将提取到的 JSON 碎片落地到硬盘，等待审计"""
-        timestamp = int(time.time() * 1000)
-        file_path = os.path.join(self.fragments_dir, f"trait_{timestamp}_{uuid.uuid4().hex[:8]}.json")
-        try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"🕵️ [暗影守护者] 碎片落地失败: {e}")
+            return []

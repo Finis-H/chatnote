@@ -48,6 +48,7 @@ web_ui.py
 actions.jsonl
 session_draft.jsonl
 vault_tasks.json
+discard/
 
 # 本地数据库与知识库文件 (如果你使用了本地向量数据库、RAG 数据持久化等)
 *.sqlite
@@ -99,6 +100,7 @@ vault/core_profile.json
 vault/habits.json
 vault/pending_memory.json
 vault/.run_token
+vault/.server_token
 vault/shadow/
 vault/test_sandbox/
 tests/

@@ -52,6 +52,12 @@ async def spawn_agent_task(raw_data: str, main_loop: asyncio.AbstractEventLoop, 
                 "content": result[i:i+chunk_size],
                 "thread_id": thread_id
             })
+        memory_items = vault_os.gatekeeper.fetch_memory()
+        await event_bus.publish({
+            "type": "SYSTEM_STATE_CHANGED",
+            "memory_pending_count": len([m for m in memory_items if m.get("status") == "PENDING"])
+        })
+        await event_bus.publish({"type": "memory_data", "content": memory_items})
             
     except Exception as e:
         await event_bus.publish({

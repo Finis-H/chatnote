@@ -154,9 +154,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 
             elif cmd_type == "fetch_memory":
                 try:
-                    pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
-                    with open(pending_path, "r", encoding="utf-8") as f:
-                        await websocket.send_json({"type": "memory_data", "content": json.load(f).get("queue", [])})
+                    await websocket.send_json({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
                 except Exception:
                     await websocket.send_json({"type": "memory_data", "content": []})
             elif cmd_type == "resolve_memory_conflict":
@@ -166,10 +164,9 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                     request.get("decision")
                 )
                 await event_bus.publish({"type": "system_toast", "content": result.get("message", "")})
+                await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
                 try:
-                    pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
-                    with open(pending_path, "r", encoding="utf-8") as f:
-                        await event_bus.publish({"type": "memory_data", "content": json.load(f).get("queue", [])})
+                    await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
                 except Exception:
                     await event_bus.publish({"type": "memory_data", "content": []})
             # VPM 雷达扫描指令
@@ -238,11 +235,9 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 async def run_surgery():
                     result = await asyncio.to_thread(vault_os.perform_memory_surgery, request.get("content", ""))
                     await event_bus.publish({"type": "system_toast", "content": result})
-                    # 手术完触发一次记忆刷新
+                    await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
                     try:
-                        pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
-                        with open(pending_path, "r", encoding="utf-8") as f:
-                            await event_bus.publish({"type": "memory_data", "content": json.load(f).get("queue", [])})
+                        await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
                     except Exception: pass
                 asyncio.create_task(run_surgery())
 
@@ -250,10 +245,9 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 async def run_import():
                     result = await asyncio.to_thread(vault_os.process_profile_import, request.get("content", ""))
                     await event_bus.publish({"type": "system_toast", "content": result})
+                    await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
                     try:
-                        pending_path = os.path.join(VAULT_ROOT, "pending_memory.json")
-                        with open(pending_path, "r", encoding="utf-8") as f:
-                            await event_bus.publish({"type": "memory_data", "content": json.load(f).get("queue", [])})
+                        await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
                     except Exception: pass
                 asyncio.create_task(run_import())
 

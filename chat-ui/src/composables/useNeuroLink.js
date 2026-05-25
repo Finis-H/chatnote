@@ -163,6 +163,9 @@ export function useNeuroLink() {
           }
         }
         else if (data.type === 'memory_data') pendingMemory.value = data.content;
+        else if (data.type === 'SYSTEM_STATE_CHANGED') {
+          sendWsCommand({ type: "fetch_memory" });
+        }
         else if (data.type === 'system_toast') showToast("🩺 [管家汇报] " + data.content);
         
         else if (data.type === 'ui_command') {

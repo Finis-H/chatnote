@@ -10,7 +10,6 @@ def init_vault():
         os.path.join(VAULT_ROOT, "shadow"),         # Layer 2: 观察沙盒
         os.path.join(VAULT_ROOT, "knowledge/inbox"),# Layer 1: 原始输入/抓取
         os.path.join(VAULT_ROOT, "knowledge/archives"), # 经过融合的知识
-        os.path.join(VAULT_ROOT, "active_tasks"),   # 任务断点快照
         os.path.join(VAULT_ROOT, "cache")           # Layer 1: 对话缓存 (TTL)
     ]
 

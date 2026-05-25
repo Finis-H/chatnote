@@ -6,7 +6,7 @@
 
 ## 目录概览
 
-- `main.py`：核心引擎，定义 `VaultOS_Terminal`，负责加载配置、初始化 LLM、向量库、RAG 组装器、记忆晋升器、工具注册器与执行器。
+- `main.py`：核心引擎，定义 `VaultOS_Terminal`，负责加载配置、初始化 LLM、向量库、RAG 组装器、SQLite 画像内核、工具注册器与执行器。
 - `server.py`：FastAPI 网关入口，启动动态端口，写入 `vault/.server_port` 和 `vault/.run_token`，提供 WebSocket、插件 UI 文件、RAG 摄入、插件管理等接口。
 - `chat-ui/`：Tauri + Vue 3 前端。`src/App.vue` 是主框架，`src/composables/useNeuroLink.js` 维护全局状态、WebSocket 连接和视图切换。
 - `chat-ui/src-tauri/`：Tauri/Rust 外壳。开发模式只启动前端；生产模式会启动 `vault_engine` sidecar，并在退出时清理 Python 进程树。
@@ -36,8 +36,8 @@
 - `VAULT_ROOT` 是运行时数据的唯一根。开发环境通常指向项目根下的 `vault`，打包环境则以可执行文件目录为基准。
 - `VaultOS_Terminal` 初始化时会加载 `vault/system_config.json`。默认模型配置指向 DashScope 兼容 OpenAI 接口，包含 chat model 和 embedding model 配置。
 - `chroma_engine.py` 使用 ChromaDB 持久化向量库，默认路径是 `vault/knowledge/vector_store`，collection 名为 `vault_core_v3`，embedding 走 DashScope。
-- `rag_assembler.py` 将 `core_profile.json`、`cognitive_map.json` 和检索上下文组装成系统提示词。
-- `promotion_gatekeeper.py` 处理记忆碎片晋升、冲突暂存、超时覆盖、黑盒日志和认知图谱更新。
+- `memory_system.py` 是画像/记忆/认知底层内核，使用 SQLite 作为唯一事实源，包含 L3 事件源、审核表、L2 实体快照、L2 认知快照、L1 路由和结算服务。
+- `rag_assembler.py` 从 SQLite L2 快照读取 Boss 画像与认知状态，并与检索上下文组装成系统提示词。
 - `tool_registry.py` 注册内置工具，并扫描 `vault/tools/*.json` 与 `vault/plugins/*/manifest.json`、`tools/*.json` 加载外部工具。
 - `tool_executor.py` 执行内置工具，包括 `web_search`、`search_local_knowledge`、`control_ui_layout`，也支持 VPM 插件的 `subprocess` 与 `http` 执行方式。
 
@@ -61,12 +61,8 @@
 
 - `vault/system_config.json`：模型、API Key、embedding 配置。
 - `vault/chat_history.json`：多线程/多上下文聊天历史。
-- `vault/core_profile.json`：用户核心画像/长期事实。
-- `vault/knowledge/entities/*.md`：用户周围社会关系实体。
-- `vault/cognitive_map.json`：认知图谱。
-- `vault/pending_memory.json`：待确认或待晋升记忆。
-- `vault/memory_blackbox.jsonl`、`blackbox_raw.jsonl`：审计/黑盒日志。
-- `vault/vault_core.db`：SQLModel/SQLite 数据库。
+- `vault/vault_core.db`：SQLModel/SQLite 数据库。画像系统的 `entities`、`memory_events`、`event_reviews`、`l2_entity_snapshots`、`l2_cognitive_snapshots`、`memory_meta` 等表都在这里。
+- `vault/blackbox_raw.jsonl`：聊天输入输出审计日志。
 - `vault/knowledge/vector_store/`：ChromaDB 向量库文件。
 
 ## 代码风格与注意事项

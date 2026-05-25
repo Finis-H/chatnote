@@ -59,7 +59,7 @@ function formatExpireTime(isoString) { return new Date(isoString).toLocaleString
         </div>
         <div class="card-footer" v-if="mem.status === 'PENDING'">
           <div>⏳ 倒计时: <span class="countdown">{{ formatExpireTime(mem.expires_at) }}</span></div>
-          <div class="decision-actions" v-if="mem.type === 'CONFLICT'">
+          <div class="decision-actions">
             <button class="decision-btn accept" @click="resolveMemoryConflict(mem.id, 'accept')">是</button>
             <button class="decision-btn reject" @click="resolveMemoryConflict(mem.id, 'reject')">否</button>
           </div>
