@@ -80,6 +80,7 @@ try:
     from memory_system import MemoryGatekeeper
     from tool_registry import ToolRegistry
     from tool_executor import ToolExecutor
+    from trace_system import copy_current_context, trace_emitter, traced_span
 except ImportError as e:
     print(f" 引擎组件缺失: {e}")
     print("请确保所有组件脚本 (.py) 都在当前目录下！")
@@ -216,146 +217,16 @@ class VaultOS_Terminal:
         with open(self.blackbox_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
-    def _extract_profile_value(self, traits, patterns):
-        for trait in traits:
-            trait_text = str(trait)
-            for pattern in patterns:
-                match = re.search(pattern, trait_text, flags=re.IGNORECASE)
-                if match:
-                    return match.group(1)
-        return None
-
-    def _looks_like_recommendation_request(self, text):
-        text = str(text or "")
-        return bool(re.search(r"(推荐|建议|适合|送|礼物|买|购买|选|选择|吃饭|吃什么|去哪|旅行|旅游|安排)", text))
-
     def _build_memory_prefetch_context(self, user_input):
-        """回答前按需读取本地画像与相关实体，避免全量实体泄漏。"""
-        context_parts = []
-        loaded_entities = []
-        is_recommendation = self._looks_like_recommendation_request(user_input)
-
-        if is_recommendation:
-            try:
-                profile_data = self.gatekeeper.get_boss_profile()
-                if profile_data:
-                    context_parts.append(
-                        "【回答前本地画像预读 - Boss】\n"
-                        "以下画像只用于理解 Boss 的预算倾向、表达偏好和决策风格；"
-                        "如果问题对象是他人，禁止把 Boss 的个人偏好套用给该实体。\n"
-                        f"{json.dumps(profile_data, ensure_ascii=False)}"
-                    )
-            except Exception as e:
-                print(f" [记忆预读] Boss 画像读取异常: {e}")
-
+        """从 SQLite L2 统一选择当前输入命中的实体与关系上下文。"""
         try:
-            if hasattr(self.gatekeeper, "resolve_entities"):
-                matched_entities = self.gatekeeper.resolve_entities(user_input)
-            else:
-                matched_entities = []
-            for entity_name in matched_entities:
-                content = self.gatekeeper.get_entity_snapshot_text(entity_name)
-                if content:
-                    context_parts.append(
-                        f"【实体专属事实源 - {entity_name}】\n"
-                        f"以下内容是回答“{entity_name}”相关问题的最高优先级事实源。"
-                        "如果用户询问该实体，只能依据本档案回答；档案没有记录时，必须说本地实体档案暂无记录，禁止套用 Boss 自己的画像或模型常识。\n"
-                        f"{content}"
-                    )
-                else:
-                    context_parts.append(
-                        f"【实体专属事实源 - {entity_name}】\n"
-                        "本地实体档案暂无记录。回答该实体问题时，禁止套用 Boss 自己的画像或模型常识。"
-                    )
-                loaded_entities.append(entity_name)
+            context_text = self.gatekeeper.get_l2_context_text(user_input)
         except Exception as e:
-            print(f" [记忆预读] 实体档案读取异常: {e}")
-
-        if loaded_entities:
-            print(f" [记忆预读] 已挂载相关实体档案: {', '.join(loaded_entities)}")
-        elif is_recommendation:
-            print(" [记忆预读] 已挂载 Boss 画像用于建议类问题。")
-
-        return "\n\n".join(context_parts)
-
-    def _detect_local_profile_query(self, user_input):
-        text = str(user_input or "")
-        if not re.search(r"(\?|？|什么|谁|哪|哪里|多少|为什么|怎么|如何|吗|呢)", text):
-            return None
-
-        target = "Boss"
-        if hasattr(self, "gatekeeper"):
-            matched_entities = self.gatekeeper.resolve_entities(text)
-            if matched_entities:
-                target = matched_entities[0]
-
-        if re.search(r"(名字|姓名|叫什么|叫啥|我是谁)", text):
-            return {"target": target, "slot": "name"}
-        if "水果" in text or "吃什么" in text:
-            return {"target": target, "slot": "fruit"}
-        if "动物" in text:
-            return {"target": target, "slot": "animal"}
-        if "编程语言" in text:
-            return {"target": target, "slot": "programming_language"}
-        if "交通方式" in text or "出行" in text:
-            return {"target": target, "slot": "transport"}
-        return None
-
-    def _answer_local_profile_query(self, query):
-        target = query.get("target")
-        slot = query.get("slot")
-        if target != "Boss":
-            content = self.gatekeeper.get_entity_snapshot_text(target)
-            if not content:
-                return f"本地实体档案暂无记录：{target}。"
-            patterns = {
-                "fruit": [r"(?:喜欢吃|爱吃)([\u4e00-\u9fffA-Za-z0-9、和]+)"],
-                "name": [r"(?:名字|姓名|叫)(?:是|为)?([\u4e00-\u9fffA-Za-z0-9·.\-]+)"],
-            }.get(slot, [])
-            value = self._extract_profile_value([content], patterns)
-            if not value:
-                return f"本地实体档案暂无记录：{target}。"
-            if slot == "fruit":
-                return f"您的{target}喜欢吃{value}。"
-            if slot == "name":
-                return f"{target}的名字是{value}。"
-            return f"本地实体档案暂无记录：{target}。"
-
-        profile = self.gatekeeper.get_boss_profile()
-        interests = profile.get("interests", []) if isinstance(profile, dict) else []
-        facts = profile.get("facts", []) if isinstance(profile, dict) else []
-        coding_style = profile.get("coding_style", []) if isinstance(profile, dict) else []
-
-        if slot == "fruit":
-            value = self._extract_profile_value(interests, [
-                r"最爱吃的水果是([\u4e00-\u9fffA-Za-z0-9、和]+)",
-                r"最喜欢吃的水果是([\u4e00-\u9fffA-Za-z0-9、和]+)",
-                r"最喜欢的水果是([\u4e00-\u9fffA-Za-z0-9、和]+)",
-                r"喜欢吃([\u4e00-\u9fffA-Za-z0-9、和]+)",
-            ])
-            return f"您最喜欢吃的水果是{value}。" if value else "本地画像暂无记录：喜欢吃什么水果。"
-        if slot == "name":
-            value = self._extract_profile_value(facts, [
-                r"(?:用户的名字是|真实姓名是|名字叫|姓名是)([\u4e00-\u9fffA-Za-z0-9·.\-]+)",
-            ])
-            return f"您的名字是{value}。" if value else "本地画像暂无记录：名字。"
-        if slot == "animal":
-            value = self._extract_profile_value(interests, [
-                r"最喜欢的动物是([\u4e00-\u9fffA-Za-z0-9、和]+)",
-            ])
-            return f"您最喜欢的动物是{value}。" if value else "本地画像暂无记录：喜欢什么动物。"
-        if slot == "programming_language":
-            value = self._extract_profile_value(coding_style + interests, [
-                r"喜欢使用([\u4e00-\u9fffA-Za-z0-9#+.、和]+)",
-                r"喜欢([\u4e00-\u9fffA-Za-z0-9#+.、和]+)",
-            ])
-            return f"您喜欢的编程语言是{value}。" if value else "本地画像暂无记录：喜欢什么编程语言。"
-        if slot == "transport":
-            value = self._extract_profile_value(interests, [
-                r"(?:出行喜欢|喜欢)(乘坐[\u4e00-\u9fffA-Za-z0-9、和]+出行|乘坐[\u4e00-\u9fffA-Za-z0-9、和]+)",
-            ])
-            return f"您出行喜欢{value}。" if value else "本地画像暂无记录：喜欢什么交通方式。"
-        return None
+            print(f" [记忆预读] L2 上下文读取异常: {e}")
+            return ""
+        if context_text:
+            print(" [记忆预读] 已挂载 SQLite L2 实体/关系上下文。")
+        return context_text
 
     def get_response(self, user_input: str, thread_id: str = "global", display_message: str = None) -> str:
         if not self.llm_config.get("api_key"):
@@ -367,38 +238,43 @@ class VaultOS_Terminal:
             if display_message.lower() == '/audit':
                 with self.gatekeeper.memory_lock:
                     self.gatekeeper.check_and_promote()
-                return " [系统动作] 审计完毕：SQLite 画像事件源已完成结算。"
-
-            local_profile_query = self._detect_local_profile_query(display_message)
-            if local_profile_query:
-                answer = self._answer_local_profile_query(local_profile_query)
-                if answer:
-                    print(" [本地画像查询] 已由 Python 确定性读取返回，跳过记忆写入与主模型推理。")
-                    self.threads.setdefault(thread_id, [])
-                    self.threads[thread_id].append({'role': 'user', 'content': display_message})
-                    self.threads[thread_id].append({'role': 'assistant', 'content': answer})
-                    self._save_to_disk()
-                    self._write_to_blackbox(f"{thread_id}_boss", display_message)
-                    self._write_to_blackbox(f"{thread_id}_butler", answer)
-                    return answer
+                return " [系统动作] SQLite 待审事件与 L2 快照已完成惰性结算。"
                 
-            print(" [暗影守护者] 正在扫描用户输入提取习惯...")
+            print(" [记忆路由] 正在扫描用户输入中的长期记忆事件...")
+            trace_emitter.begin_background_task()
             def _shadow_pipeline():
-                current_history = self.threads.get(thread_id, []).copy()
-                caller_with_memory = lambda p, u: self._mock_llm_for_extractor(p, u, chat_history=current_history)
-                
-                with self.gatekeeper.memory_lock:
-                    candidates = self.extractor.analyze_input(display_message, caller_with_memory, chat_history=current_history)
-                    self.gatekeeper.check_and_promote(
-                        candidates,
-                        llm_router=self._call_memory_router,
-                        raw_reference=thread_id
-                    )
-            threading.Thread(target=_shadow_pipeline).start()
+                try:
+                    with traced_span("MEMORY_FLOW", "后台记忆流程") as flow_span:
+                        current_history = self.threads.get(thread_id, []).copy()
+                        caller_with_memory = lambda p, u: self._mock_llm_for_extractor(p, u, chat_history=current_history)
+                        
+                        with self.gatekeeper.memory_lock:
+                            extract_span = trace_emitter.start_span("MEMORY_EXTRACT", "解析长期记忆候选")
+                            candidates = self.extractor.analyze_input(display_message, caller_with_memory, chat_history=current_history)
+                            candidate_count = len(candidates or [])
+                            extract_span.finish(
+                                "SUCCESS",
+                                f"发现 {candidate_count} 条长期记忆" if candidate_count else "未发现需要长期保存的信息",
+                                {"count": candidate_count}
+                            )
+                            self.gatekeeper.check_and_promote(
+                                candidates,
+                                llm_router=self._call_memory_router,
+                                raw_reference=thread_id
+                            )
+                        flow_span.finish("SUCCESS", "后台记忆流程完成", {"count": candidate_count})
+                except Exception as e:
+                    print(f" [记忆路由] 后台记忆流程失败: {e}")
+                finally:
+                    trace_emitter.finish_background_task()
+            shadow_context = copy_current_context()
+            threading.Thread(target=shadow_context.run, args=(_shadow_pipeline,)).start()
 
-            prefetch_context = self._build_memory_prefetch_context(display_message)
+            with traced_span("L2_QUERY", "预读记忆画像上下文"):
+                prefetch_context = self._build_memory_prefetch_context(display_message)
 
-            blueprint = self._compile_jit_task(display_message, prefetch_context=prefetch_context)
+            with traced_span("JIT_PARSE", "编译动态执行蓝图"):
+                blueprint = self._compile_jit_task(display_message, prefetch_context=prefetch_context)
             status = blueprint.get("plan_status", "DIRECT_CHAT")
             print(f" [编译决断]: {status} | 理由: {blueprint.get('reasoning')}")
             
@@ -420,32 +296,33 @@ class VaultOS_Terminal:
                 
                 def run_step(step_data):
                     tool_name = step_data.get("tool_name")
-                    raw_args = step_data.get("args", {})
-                    output_key = step_data.get("output_to_blackboard")
-                    # 核心防线：动态参数解析 (主引擎负责把黑板数据喂给插件)
-                    resolved_args = {}
-                    with bb_lock:
-                        for k, v in raw_args.items():
-                            # 如果参数值是以 $$ 开头的字符串，说明需要去黑板取值
-                            if isinstance(v, str) and v.startswith("$$"):
-                                bb_key = v[2:]
-                                resolved_args[k] = blackboard.get(bb_key, v) # 取不到就保留原值
-                            else:
-                                resolved_args[k] = v
-                    
-                    print(f"   -> [并发激活] 委派任务至: {tool_name} ...")
-                    class MockToolCall:
-                        class MockFunction:
-                            def __init__(self, name, arguments):
-                                self.name = name
-                                self.arguments = arguments
-                        def __init__(self, name, arguments):
-                            self.function = self.MockFunction(name, arguments)
-                    step_result = self.executor.execute(MockToolCall(tool_name, json.dumps(resolved_args)))
-                    if output_key:
+                    with traced_span("DAG_STEP", f"执行 DAG 节点: {tool_name}", {"step": step_data}):
+                        raw_args = step_data.get("args", {})
+                        output_key = step_data.get("output_to_blackboard")
+                        # 核心防线：动态参数解析 (主引擎负责把黑板数据喂给插件)
+                        resolved_args = {}
                         with bb_lock:
-                            blackboard[output_key] = step_result
-                        print(f"   -> [黑板更新] 已写入共享变量: {output_key}")
+                            for k, v in raw_args.items():
+                                # 如果参数值是以 $$ 开头的字符串，说明需要去黑板取值
+                                if isinstance(v, str) and v.startswith("$$"):
+                                    bb_key = v[2:]
+                                    resolved_args[k] = blackboard.get(bb_key, v) # 取不到就保留原值
+                                else:
+                                    resolved_args[k] = v
+                        
+                        print(f"   -> [并发激活] 委派任务至: {tool_name} ...")
+                        class MockToolCall:
+                            class MockFunction:
+                                def __init__(self, name, arguments):
+                                    self.name = name
+                                    self.arguments = arguments
+                            def __init__(self, name, arguments):
+                                self.function = self.MockFunction(name, arguments)
+                        step_result = self.executor.execute(MockToolCall(tool_name, json.dumps(resolved_args)))
+                        if output_key:
+                            with bb_lock:
+                                blackboard[output_key] = step_result
+                            print(f"   -> [黑板更新] 已写入共享变量: {output_key}")
                         
                 with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
                     pending_steps = steps.copy()
@@ -460,7 +337,8 @@ class VaultOS_Terminal:
                             if isinstance(depends_on, str): depends_on = [depends_on]
                             if all(dep in completed_step_ids for dep in depends_on):
                                 if step_id not in submitted_step_ids:
-                                    step_futures[step_id] = pool.submit(run_step, step)
+                                    step_context = copy_current_context()
+                                    step_futures[step_id] = pool.submit(step_context.run, run_step, step)
                                     submitted_step_ids.add(step_id)
                                     pending_steps.remove(step)
                                     progress_made = True
@@ -512,13 +390,14 @@ class VaultOS_Terminal:
                 
             final_system_prompt = self.assembler.assemble(display_message, retrieved_context)
             print(" [核心算力] 正在生成最终回复...")
-            answer = self._call_llm(
-                final_system_prompt, 
-                user_input, 
-                thread_id=thread_id, 
-                save_to_memory=False, 
-                display_message=display_message
-            )
+            with traced_span("LLM_FINAL", "生成最终回复"):
+                answer = self._call_llm(
+                    final_system_prompt, 
+                    user_input, 
+                    thread_id=thread_id, 
+                    save_to_memory=False, 
+                    display_message=display_message
+                )
             self.threads[thread_id].append({'role': 'user', 'content': display_message})
             self.threads[thread_id].append({'role': 'assistant', 'content': answer})
             self._save_to_disk()
@@ -527,6 +406,7 @@ class VaultOS_Terminal:
             return answer       
         except Exception as e:
             error_msg = f"算力中心崩溃啦：{str(e)}"
+            trace_emitter.emit_event("AGENT_ERROR", "FAILED", "核心推理链路异常", details={"error": str(e)})
             print(f" {error_msg}")
             return error_msg
 
@@ -542,7 +422,7 @@ class VaultOS_Terminal:
             return " 脑区链接断开，手术失败。"
 
     def resolve_memory_conflict(self, memory_id, decision):
-        """确定性处理单条待决冲突，避免简单同意/拒绝走大模型手术。"""
+        """确定性处理单条待审事件，避免简单同意/拒绝走大模型手术。"""
         try:
             if not memory_id:
                 return {"ok": False, "message": " 冲突处理失败：缺少记忆 ID。"}
@@ -597,9 +477,9 @@ class VaultOS_Terminal:
         os.system('cls' if os.name == 'nt' else 'clear')
         boot_msgs = [
             "Initializing Vault OS Kernel...",
-            "Loading Layer 3 Core Profile...",
+            "Mounting SQLite Memory Event Store...",
             "Mounting ChromaDB Vector Space...",
-            "Waking up Shadow Observer Daemon...",
+            "Reconciling L2 Snapshot Indexes...",
             "System Online. Welcome back, Boss."
         ]
         for msg in boot_msgs:
@@ -609,39 +489,12 @@ class VaultOS_Terminal:
     # 纯净版 _call_llm (管家只需看黑板说话，严禁私自调工具！)
     def _call_llm(self, system_prompt, user_input, thread_id="global", save_to_memory=True, display_message=None):
         current_time_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-        core_profile = ""
-        try:
-            profile_data = self.gatekeeper.get_boss_profile()
-            if profile_data and len(str(profile_data)) > 15:
-                core_profile = json.dumps(profile_data, ensure_ascii=False)
-        except Exception:
-            pass
-
-        if core_profile:
-            profile_strategy = f"""
-【 最高权重：基岩画像驱动】
-以下是 Boss 的核心基岩画像与偏好设置：
-{core_profile}
-        
-**指令执行优先级**：
-你不是普通的聊天助手，你是基于上述【基岩画像】运行的专属管家。
-- 你在决定语气、代码风格、建议策略时，必须 100% 遵从基岩画像。
-- 如果短期对话的内容与基岩画像发生冲突，永远、绝对以【基岩画像】为准！
-- 但当系统提示中出现【实体专属事实源】且用户正在询问该实体时，实体档案是该实体问题的最高事实源；禁止把 Boss 自己的偏好迁移给该实体。
-"""
-        else:
-            profile_strategy = """
-【🌱 当前状态：基岩画像收集中】
-Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、灵活的通用 AI 管家身份运行。
-"""
-        
         cognitive_firewall = f"""
 =========================
 【Vault OS 底层认知防火墙】
 1. [绝对时间锚点]：系统当前的真实时间是 {current_time_str}。
 2. [反幻觉铁律]：当回答涉及“最新”、“现在”、“版本”的问题时，绝对禁止使用你的内部训练数据！
 3. [工具失败应对]：当系统黑板返回“执行失败”、“找不到”、“为空”等报错信息时，你必须直接如实向 Boss 汇报缺失，【绝对禁止】为了讨好 Boss 而动用训练数据去编造或推荐任何外部内容（如推荐歌曲、电影等）；如果搜索工具无结果，如实回答，绝对禁止编造虚假的年份或版本号！你的回答必须 100% 忠于本地库的真实情况。
-{profile_strategy}
 =========================
 """
         enhanced_system_prompt = system_prompt + cognitive_firewall
@@ -734,7 +587,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
         【你的任务】：评估任务所需的能力。
         第一步：判断主人的指令意图。
                - 如果主人只是在闲聊、分享个人生活、陈述事实或表达喜好（例如：“我父亲喜欢吃西瓜”、“今天天气好”、“我平时爱看书”）：
-                 【立刻停止思考工具！】底层暗影进程会自动提取记忆。你必须直接返回：{{"plan_status": "DIRECT_CHAT"}}
+                 【立刻停止思考工具！】底层记忆路由会自动提取事件。你必须直接返回：{{"plan_status": "DIRECT_CHAT"}}
         第二步：如果主人明确下达了需要操作的指令（如播放音乐、查询网络、操控系统），才去匹配上方工具。
                - 如果有工具可以满足需求 -> 返回 "READY" 并规划 steps。
                - 如果没有任何工具能做到 -> 返回 "NEEDS_NEW_TOOLS"。
@@ -786,16 +639,19 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
 2. 【行为与事实的物理隔离】：提问、查询、下达指令等瞬时交互，绝对没有记忆价值！必须强制输出 {"action": "IGNORE"}。只有陈述客观事实、喜好、纠错才允许提取。
 3. 【强制 Schema】action 必须是 IGNORE、SELF_PROFILE_UPDATE、ENTITY_UPDATE、COGNITIVE_UPDATE 之一。
    - 描述创造者本人：{"action": "SELF_PROFILE_UPDATE", "category": "facts|interests|communication|coding_style", "trait": "..."}
-   - 描述其他人或事物：{"action": "ENTITY_UPDATE", "entity": "标准称呼", "trait": "..."}
+   - 描述其他人或事物：{"action": "ENTITY_UPDATE", "entity": "标准称呼或人物姓名", "trait": "..."}
    - 描述技术栈、项目状态、领域卡点：{"action": "COGNITIVE_UPDATE", "domain": "领域名", "new_cognition": {"current_bottlenecks": [], "mental_model": "", "actionable_insight": ""}}
 
 【Few-Shot 标准输出示例】（必须严格照做）：
 === 正例：事实陈述与纠错 ===
-用户输入："我出行喜欢做飞机"
+用户输入："我出行喜欢坐飞机"
 输出：{"action": "SELF_PROFILE_UPDATE", "category": "interests", "trait": "出行喜欢乘坐飞机"}
 
 用户输入："不对，她喜欢吃哈密瓜"
 输出：{"action": "ENTITY_UPDATE", "entity": "母亲", "trait": "喜欢吃哈密瓜"}
+
+用户输入："我父亲叫李四"
+输出：{"action": "ENTITY_UPDATE", "entity": "李四", "trait": "父亲叫李四"}
 
 用户输入："Tauri 的 UI 真难写，我卡在窗口通信上"
 输出：{"action": "COGNITIVE_UPDATE", "domain": "Tauri", "new_cognition": {"current_bottlenecks": ["窗口通信"], "mental_model": "Boss 正在处理 Tauri UI 与窗口通信问题", "actionable_insight": "回答时优先给出 Tauri v2 桌面端可落地方案"}}
@@ -853,7 +709,7 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
     def run_cli(self):
         print("\n" + "="*50)
         print(" Vault OS 主控终端已接管 ")
-        print("输入 '/ingest' 摄入新笔记，'/audit' 手动核准习惯，'/exit' 退出系统")
+        print("输入 '/ingest' 摄入新笔记，'/audit' 结算 SQLite 待审事件，'/exit' 退出系统")
         print("="*50 + "\n")
 
         while True:
@@ -914,14 +770,16 @@ Boss 的专属基岩画像尚未完全建立。请暂时以一个高度专业、
 输出字段必须固定为：
 {
   "target_entity": "Boss 或具体实体名",
-  "action_category": "PROFILE|ENTITY|PLAN|LEARN|BUILD|DEBUG|ARCHIVE",
+  "action_category": "PROFILE|ENTITY|RELATION|PLAN|LEARN|BUILD|DEBUG|ARCHIVE",
   "action_detail": "facts|interests|communication|coding_style 或领域名",
   "context": "极短事实句",
+  "relation_type": "father|mother|partner|friend|colleague|project_member|uses_tech，可省略",
+  "source_entity": "关系源实体，可省略，默认 Boss",
   "confidence": 0.0-1.0,
   "requires_review": true/false
 }
 规则：
-1. Boss 本人事实用 PROFILE；他人事实用 ENTITY。
+1. Boss 本人事实用 PROFILE；他人普通事实用 ENTITY；“X 是我的父亲/朋友/项目成员/技术栈”等关系事实用 RELATION。
 2. 技术规划/学习目标用 PLAN 或 LEARN；当前开发/排障卡点用 BUILD 或 DEBUG。
 3. 姓名、血缘、身份等单值属性若不确定，requires_review 必须为 true。
 4. 只输出 JSON，不要解释。

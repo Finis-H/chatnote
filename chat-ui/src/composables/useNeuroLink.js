@@ -43,17 +43,44 @@ export const activeAgentComponent = shallowRef(null);
 export const deleteModal = ref({ show: false, note: null });
 export const isImporting = ref(false);
 export const importFile = ref(null);
+export const traceEvents = ref([]);
+export const activeTraceId = ref('');
+export const isTracePanelOpen = ref(false);
 
 export const searchQuery = ref('');
 export const searchMode = ref('all');
 export const memoryFilter = ref('all');
 
 export const pendingCount = computed(() => pendingMemory.value.filter(m => m.status === 'PENDING').length);
+export const traceSummary = computed(() => {
+  const events = traceEvents.value || [];
+  const runningCount = events.filter(event => event.status === 'RUNNING').length;
+  const failedCount = events.filter(event => ['FAILED', 'TIMEOUT'].includes(event.status)).length;
+  const abortedCount = events.filter(event => event.status === 'ABORTED').length;
+  let status = 'IDLE';
+  if (failedCount > 0) status = 'FAILED';
+  else if (runningCount > 0) status = 'RUNNING';
+  else if (events.length > 0) status = 'SUCCESS';
+  return {
+    status,
+    totalCount: events.length,
+    runningCount,
+    failedCount,
+    abortedCount
+  };
+});
+
+export function toggleTracePanel() {
+  isTracePanelOpen.value = !isTracePanelOpen.value;
+}
 
 let ws = null;
 let isAppDestroyed = false;
 let toastTimeout = null;
 let shakeTimeout = null;
+let traceWatchdogTimer = null;
+const TRACE_TERMINAL_STATUSES = ['SUCCESS', 'FAILED', 'TIMEOUT', 'ABORTED', 'BLOCKED'];
+const TRACE_QUEUE_LIMIT = 50;
 
 export function resolveMemoryConflict(id, decision) {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -81,6 +108,104 @@ export function useNeuroLink() {
     }
   }
 
+  function clearTraceWatchdog() {
+    if (traceWatchdogTimer) clearTimeout(traceWatchdogTimer);
+    traceWatchdogTimer = null;
+  }
+
+  function trimTraceQueue() {
+    if (traceEvents.value.length > TRACE_QUEUE_LIMIT) {
+      traceEvents.value = traceEvents.value.slice(-TRACE_QUEUE_LIMIT);
+    }
+  }
+
+  function upsertTraceEvent(event) {
+    if (!event || !event.span_id) return;
+    if (event.trace_id) activeTraceId.value = event.trace_id;
+    const normalized = {
+      ...event,
+      timestamp: event.timestamp || Date.now(),
+      collapsed: event.collapsed || event.step_code === 'MEMORY_FLOW',
+      muted: event.status === 'ABORTED'
+    };
+    const index = traceEvents.value.findIndex(item => item.span_id === normalized.span_id);
+    if (index >= 0) {
+      const existing = traceEvents.value[index];
+      if ((normalized.timestamp || 0) >= (existing.timestamp || 0)) {
+        traceEvents.value.splice(index, 1, { ...existing, ...normalized });
+      }
+    } else {
+      traceEvents.value.push(normalized);
+    }
+    trimTraceQueue();
+  }
+
+  async function fetchTraceSnapshot(traceId, threadId) {
+    const primaryUrl = traceId
+      ? `${SystemConfig.API_BASE}/api/traces/${encodeURIComponent(traceId)}/snapshot`
+      : `${SystemConfig.API_BASE}/api/traces/thread/${encodeURIComponent(threadId || 'global')}/latest`;
+    const resp = await fetch(primaryUrl);
+    if (!resp.ok) throw new Error(`Trace snapshot failed: ${resp.status}`);
+    return await resp.json();
+  }
+
+  function applyTraceSnapshot(snapshot) {
+    if (!snapshot || !snapshot.run) return;
+    const runStatus = snapshot.run.status;
+    activeTraceId.value = snapshot.run.trace_id || activeTraceId.value;
+
+    (snapshot.events || []).forEach(event => upsertTraceEvent(event));
+
+    if (runStatus === 'SUCCESS') {
+      const parentIdsToCollapse = new Set();
+      traceEvents.value = traceEvents.value.map(event => {
+        if (event.status === 'RUNNING') {
+          if (event.parent_span_id) parentIdsToCollapse.add(event.parent_span_id);
+          return { ...event, status: 'SUCCESS', muted: false };
+        }
+        return event;
+      });
+      traceEvents.value = traceEvents.value.map(event => (
+        parentIdsToCollapse.has(event.span_id) ? { ...event, collapsed: true } : event
+      ));
+      clearTraceWatchdog();
+    } else if (runStatus === 'FAILED' || runStatus === 'TIMEOUT') {
+      traceEvents.value = traceEvents.value.map(event => (
+        event.status === 'RUNNING' ? { ...event, status: 'ABORTED', muted: true } : event
+      ));
+      const hasSummaryError = traceEvents.value.some(event => event.isSummaryError && event.trace_id === snapshot.run.trace_id);
+      if (!hasSummaryError) {
+        traceEvents.value.push({
+          trace_id: snapshot.run.trace_id,
+          thread_id: snapshot.run.thread_id,
+          span_id: `trace_error_${Date.now()}`,
+          parent_span_id: snapshot.run.root_span_id || null,
+          step_code: 'TRACE_SUMMARY',
+          status: 'FAILED',
+          message: snapshot.run.error_message || '任务执行失败，已保护现场并中止未完成节点。',
+          timestamp: Date.now(),
+          details: {},
+          metrics: {},
+          isSummaryError: true
+        });
+      }
+      trimTraceQueue();
+      clearTraceWatchdog();
+    }
+  }
+
+  function startTraceWatchdog(traceId, threadId) {
+    clearTraceWatchdog();
+    traceWatchdogTimer = setTimeout(async () => {
+      try {
+        const snapshot = await fetchTraceSnapshot(traceId || activeTraceId.value, threadId);
+        applyTraceSnapshot(snapshot);
+      } catch (error) {
+        console.warn('[Trace Watchdog] 快照补偿失败:', error);
+      }
+    }, 15000);
+  }
+
   // 🚀 核心架构解法：在系统主流程中，单向注入所有依赖环境！
   // 完美提供了真正的函数 (showToast) 和所需配置，不再造成 TypeError 和 undefined
   registerVpmContext({
@@ -88,7 +213,8 @@ export function useNeuroLink() {
     pluginsList, globalMessages, noteThreads, currentNote, pendingMemory,
     isThinking, userInput, systemToast, inputError, isImmersive,
     activeAgentComponent, deleteModal, isImporting, importFile,
-    searchQuery, searchMode, memoryFilter, pendingCount,
+    searchQuery, searchMode, memoryFilter, pendingCount, traceEvents, activeTraceId,
+    isTracePanelOpen, traceSummary, toggleTracePanel,
     showToast, sendWsCommand, switchView, openNote, confirmDelete, saveSystemConfig, confirmImport
   });
 
@@ -141,6 +267,10 @@ export function useNeuroLink() {
         }
         else if (data.type === 'status' && data.content === 'thinking') {
           isThinking.value = true;
+          if (data.trace_id) {
+            activeTraceId.value = data.trace_id;
+            startTraceWatchdog(data.trace_id, data.thread_id || 'global');
+          }
           if (activeView.value === 'note_detail') {
             if(!noteThreads.value[currentNote.value.id]) noteThreads.value[currentNote.value.id] = [];
             noteThreads.value[currentNote.value.id].push({ role: 'ai', content: '' });
@@ -150,6 +280,14 @@ export function useNeuroLink() {
         }
         else if (data.type === 'status' && data.content === 'done') {
           isThinking.value = false;
+        }
+        else if (data.type === 'trace_event') {
+          upsertTraceEvent(data);
+          if (data.step_code === 'ROOT' && TRACE_TERMINAL_STATUSES.includes(data.status)) {
+            fetchTraceSnapshot(data.trace_id, data.thread_id)
+              .then(applyTraceSnapshot)
+              .catch(error => console.warn('[Trace] 终态快照拉取失败:', error));
+          }
         }
         else if (data.type === 'stream' || data.type === 'chat_stream') {
           const targetId = data.thread_id || 'global';
@@ -243,6 +381,9 @@ export function useNeuroLink() {
 
     const thread_id = activeView.value === 'note_detail' ? currentNote.value.id : 'global';
     let finalPayload = msg;
+    traceEvents.value = [];
+    activeTraceId.value = '';
+    clearTraceWatchdog();
 
     if (activeView.value === 'note_detail') {
       noteThreads.value[currentNote.value.id].push({ role: 'user', content: msg });

@@ -7,6 +7,7 @@ from datetime import datetime
 from ddgs import DDGS
 from core_bus import event_bus
 import asyncio
+from trace_system import trace_emitter
 
 class ToolExecutor:
     def __init__(self, registry, vector_db=None):
@@ -22,7 +23,20 @@ class ToolExecutor:
             args = json.loads(tool_call.function.arguments)
         except json.JSONDecodeError:
             return "[SYSTEM_ERROR]: 大模型生成的参数 JSON 解析失败。"
-            
+
+        span = trace_emitter.start_span("TOOL_EXEC", f"执行工具: {func_name}", {"tool": func_name, "args": args})
+        try:
+            result = self._execute_impl(func_name, args)
+            status = "SUCCESS"
+            if str(result).startswith("[SYSTEM_ERROR]") or str(result).startswith("[搜索工具异常]"):
+                status = "TIMEOUT" if "超时" in str(result) else "FAILED"
+            span.finish(status, f"工具 {func_name} 执行完成", {"result_preview": str(result)[:800]})
+            return result
+        except Exception as e:
+            span.finish("FAILED", f"工具 {func_name} 执行失败", {"error": str(e)})
+            return f"[SYSTEM_ERROR]: 工具 '{func_name}' 执行异常: {e}"
+
+    def _execute_impl(self, func_name, args):
         # 通道 A：执行系统内置原生工具 (Built-ins)
         if func_name == "web_search":
             return self.action_web_search(args.get("query", ""))
@@ -118,14 +132,14 @@ class ToolExecutor:
                     resp = requests.get(endpoint, params=request_data, headers=headers, timeout=15)
                 resp.raise_for_status() 
                 return resp.text
-            except Exception as e: # 扩大异常捕获，防止 URL 解析错误导致线程崩溃
-                return f"[SYSTEM_ERROR]: 请求外部 Agent 失败 ({endpoint})。错误信息: {str(e)}"
             except requests.exceptions.Timeout:
                 return "[SYSTEM_ERROR]: 请求 Agent 超时 (>15秒)。可能原因：对方服务器宕机或网络阻塞。"
             except requests.exceptions.ConnectionError:
                 return f"[SYSTEM_ERROR]: 无法连接到外部 Agent ({endpoint})。可能原因：服务未启动或网络不通。"
             except requests.exceptions.HTTPError as err:
                 return f"[SYSTEM_ERROR]: 第三方 Agent 拒绝服务。HTTP 状态码: {err.response.status_code}。"
+            except Exception as e: # 扩大异常捕获，防止 URL 解析错误导致线程崩溃
+                return f"[SYSTEM_ERROR]: 请求外部 Agent 失败 ({endpoint})。错误信息: {str(e)}"
         else:
             return f"[SYSTEM_ERROR]: 不支持的执行模式 '{execution_config['type']}'"
         

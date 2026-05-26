@@ -1,4 +1,4 @@
-import re
+from memory_rules import is_transient_interaction
 
 class HabitExtractor:    
     def __init__(self):
@@ -7,8 +7,7 @@ class HabitExtractor:
 
     def analyze_input(self, user_input: str, llm_caller, chat_history=None):
         """静默路由用户输入，返回候选记忆事件。"""
-        question_pattern = r"(\?|？|什么|谁|哪|哪里|多少|为什么|怎么|如何|吗|呢|推荐|建议|送.*礼物|买什么|购买|选择|选什么|去哪|吃什么)"
-        if re.search(question_pattern, user_input or ""):
+        if is_transient_interaction(user_input):
             print("🕵️ [记忆 Router] 检测到查询语句，跳过画像写入。")
             return []
         # 1. 提取近期上下文（防代词指代丢失）
@@ -55,5 +54,5 @@ class HabitExtractor:
                 return [result_json]
             return []
         except Exception as e:
-            print(f"🕵️ [暗影守护者] 分析异常: {e}")
+            print(f"🕵️ [记忆 Router] 分析异常: {e}")
             return []

@@ -11,3 +11,4 @@ engine = create_engine(sqlite_url, echo=True)
 
 def init_db():
     SQLModel.metadata.create_all(engine)
+    memory_system.MemoryRepository(VAULT_ROOT)

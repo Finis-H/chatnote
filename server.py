@@ -18,6 +18,7 @@ from db import engine, init_db
 from fastapi.staticfiles import StaticFiles
 from core_bus import event_bus
 from agent_runner import spawn_agent_task
+from trace_system import trace_emitter
 
 app = FastAPI()
 # 跨域资源共享 (CORS) 放行配置
@@ -63,6 +64,8 @@ with open(os.path.join(VAULT_ROOT, ".run_token"), "w", encoding="utf-8") as f:
 with open(os.path.join(VAULT_ROOT, ".server_port"), "w", encoding="utf-8") as f:
     f.write(str(SERVER_PORT))
 
+trace_emitter.configure(VAULT_ROOT, event_bus=event_bus, run_token=SECURITY_TOKEN)
+
 print("="*60)
 print(f" [网关启动] Vault OS 后台微服务已点火！")
 print(f" [网络嗅探] 成功锁定可用端口: {SERVER_PORT}")
@@ -71,6 +74,20 @@ print("="*60)
 
 print(" 正在唤醒底层大模型和向量引擎...")
 vault_os = VaultOS_Terminal()
+
+@app.get("/api/traces/{trace_id}/snapshot")
+async def get_trace_snapshot(trace_id: str):
+    snapshot = trace_emitter.get_snapshot(trace_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="trace 不存在")
+    return snapshot
+
+@app.get("/api/traces/thread/{thread_id}/latest")
+async def get_latest_thread_trace(thread_id: str):
+    snapshot = trace_emitter.get_latest_snapshot(thread_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="trace 不存在")
+    return snapshot
 
 @app.post("/api/rag/ingest")
 async def api_rag_ingest(request: Request):

@@ -28,14 +28,14 @@ function formatExpireTime(isoString) { return new Date(isoString).toLocaleString
 <template>
   <div class="scroll-container">
     <div class="memory-header">
-      <h2 class="view-title">🧠 记忆神经同步 (Staging Area)</h2>
-      <p class="memory-subtitle">在此界面向管家发送指令，可对记忆进行二次覆写或驳回。超时 3 天的警告项将被强行同化。</p>
+      <h2 class="view-title">🧠 记忆事件同步</h2>
+      <p class="memory-subtitle">在此处理低置信度、关系变更、手术指令和冲突候选。超时 3 天的待审项将自动同化。</p>
     </div>
     <div class="search-console">
       <div class="filter-capsules">
         <button :class="{ active: memoryFilter === 'all' }" @click="memoryFilter = 'all'">全局视野</button>
         <button :class="{ active: memoryFilter === 'pending'}" @click="memoryFilter = 'pending'">
-          ⚠️ 待决冲突 ({{ pendingCount }})
+          ⚠️ 待审事件 ({{ pendingCount }})
         </button>
         <button :class="{ active: memoryFilter === 'merged' }" @click="memoryFilter = 'merged'">✨ 历史档案</button>
       </div>
@@ -48,7 +48,7 @@ function formatExpireTime(isoString) { return new Date(isoString).toLocaleString
           <span class="mem-status" v-if="mem.status === 'MERGED'">✨ 已同化生效</span>
           <span class="mem-status" v-if="mem.status === 'REJECTED'">❌ 已驳回抹除</span>
           <span class="mem-status" v-if="mem.status === 'AUTO_OVERWRITTEN'">⏰ 超时强行同化</span>
-          <span class="mem-status blink" v-if="mem.status === 'PENDING'">⚠️ 记忆冲突待决</span>
+          <span class="mem-status blink" v-if="mem.status === 'PENDING'">⚠️ 事件待审</span>
         </div>
         <div class="card-body">
           <div v-if="mem.type === 'CONFLICT'" class="conflict-zone">
