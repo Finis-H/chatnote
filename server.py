@@ -8,17 +8,24 @@ import asyncio
 import importlib.util
 import shutil
 import time
+import uuid
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from main import VaultOS_Terminal, VAULT_ROOT
+from main import VaultOS_Terminal, TempVaultSession, VAULT_ROOT
 from sqlmodel import Session, select
 from db import engine, init_db
 from fastapi.staticfiles import StaticFiles
-from core_bus import event_bus
-from agent_runner import spawn_agent_task
+from core_bus import bind_event_session, event_bus, reset_event_session
+from agent_runner import spawn_agent_task, spawn_temp_agent_task
 from trace_system import trace_emitter
+from plugin_security import (
+    PLUGIN_ROUTE_INTERNAL_HEADER,
+    PLUGIN_UI_TOKEN_HEADER,
+    normalize_manifest_security,
+    plugin_security_manager,
+)
 
 app = FastAPI()
 # 跨域资源共享 (CORS) 放行配置
@@ -30,6 +37,28 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"], 
 )
+
+@app.middleware("http")
+async def bind_plugin_session_context(request: Request, call_next):
+    session_id = "main"
+    if request.url.path.startswith("/api/plugins/"):
+        parts = request.url.path.split("/")
+        plugin_id = parts[3] if len(parts) > 3 else ""
+        if plugin_id and not plugin_security_manager.is_first_party(plugin_id):
+            internal_token = request.headers.get(PLUGIN_ROUTE_INTERNAL_HEADER, "")
+            ui_token = request.headers.get(PLUGIN_UI_TOKEN_HEADER, "")
+            if not (
+                plugin_security_manager.verify_internal_token(internal_token)
+                or plugin_security_manager.verify_plugin_ui_token(plugin_id, ui_token)
+            ):
+                raise HTTPException(status_code=401, detail="Plugin route requires scoped authorization")
+        session_id = request.headers.get("X-Vault-Session-Id", "main") or "main"
+    token = bind_event_session(session_id)
+    try:
+        return await call_next(request)
+    finally:
+        reset_event_session(token)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGINS_DIR = os.path.join(VAULT_ROOT, "plugins")
 os.makedirs(PLUGINS_DIR, exist_ok=True)
@@ -65,6 +94,7 @@ with open(os.path.join(VAULT_ROOT, ".server_port"), "w", encoding="utf-8") as f:
     f.write(str(SERVER_PORT))
 
 trace_emitter.configure(VAULT_ROOT, event_bus=event_bus, run_token=SECURITY_TOKEN)
+plugin_security_manager.configure(VAULT_ROOT, event_bus=event_bus, internal_token=SECURITY_TOKEN)
 
 print("="*60)
 print(f" [网关启动] Vault OS 后台微服务已点火！")
@@ -74,6 +104,43 @@ print("="*60)
 
 print(" 正在唤醒底层大模型和向量引擎...")
 vault_os = VaultOS_Terminal()
+
+
+class SessionManager:
+    def __init__(self, main_app):
+        self.main_app = main_app
+        self.temp_sessions = {}
+        self.lock = asyncio.Lock()
+
+    async def create_temp_session(self):
+        session_id = f"temp:{uuid.uuid4().hex[:12]}"
+        async with self.lock:
+            self.temp_sessions[session_id] = {
+                "runtime": TempVaultSession(self.main_app, session_id),
+                "closed": False,
+            }
+        return session_id
+
+    async def end_temp_session(self, session_id):
+        async with self.lock:
+            session = self.temp_sessions.get(session_id)
+            if session:
+                session["closed"] = True
+                self.temp_sessions.pop(session_id, None)
+        return True
+
+    def get_temp_runtime(self, session_id):
+        session = self.temp_sessions.get(session_id)
+        if not session or session.get("closed"):
+            return None
+        return session.get("runtime")
+
+    def is_temp_open(self, session_id):
+        session = self.temp_sessions.get(session_id)
+        return bool(session and not session.get("closed"))
+
+
+session_manager = SessionManager(vault_os)
 
 @app.get("/api/traces/{trace_id}/snapshot")
 async def get_trace_snapshot(trace_id: str):
@@ -108,6 +175,14 @@ async def api_rag_ingest(request: Request):
         if not safe_source.startswith(allowed_prefix):
             print(f" [越权拦截] 第三方 Agent 试图篡改系统核心记忆: {safe_source}")
             return {"status": "error", "message": "越权操作：第三方插件仅允许操作自己的沙盒数据！"}
+        rel_source = os.path.relpath(safe_source, allowed_prefix)
+        source_parts = rel_source.split(os.sep)
+        source_plugin_id = source_parts[0] if source_parts and source_parts[0] != "." else ""
+        for chunk in payload_data.get("payload", []) or []:
+            metadata = chunk.get("metadata", {}) if isinstance(chunk, dict) else {}
+            metadata_plugin_id = metadata.get("plugin_id")
+            if metadata_plugin_id and metadata_plugin_id != source_plugin_id:
+                return {"status": "error", "message": "RAG metadata.plugin_id must match the plugin source path"}
             
         success = await asyncio.to_thread(vault_os.receive_knowledge_payload, payload_data)
         return {"status": "success"} if success else {"status": "error"}
@@ -122,6 +197,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
         
     await websocket.accept()
     real_loop = asyncio.get_running_loop()
+    plugin_security_manager.bind_runtime(main_loop=real_loop, event_bus=event_bus)
 
     # 1. 启动 Event Bus 监听协程：让后台任务能够把结果推给前端
     async def consume_events():
@@ -142,6 +218,45 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
             request = json.loads(raw_data) 
             cmd_type = request.get("type")
             thread_id = request.get("thread_id", "global")
+            session_mode = request.get("session_mode", "main")
+            session_id = request.get("session_id", "main")
+
+            if cmd_type == "start_temp_session":
+                new_session_id = await session_manager.create_temp_session()
+                await websocket.send_json({"type": "temp_session_started", "session_id": new_session_id})
+                continue
+
+            if cmd_type == "plugin_permission_response":
+                plugin_security_manager.resolve_permission(
+                    request.get("request_id", ""),
+                    request.get("decision", "deny")
+                )
+                continue
+
+            if cmd_type == "end_temp_session":
+                await session_manager.end_temp_session(session_id)
+                await websocket.send_json({"type": "temp_session_ended", "session_id": session_id})
+                continue
+
+            if session_mode == "temp" and cmd_type in {
+                "fetch_memory",
+                "resolve_memory_conflict",
+                "memory_surgery",
+                "import_profile",
+                "fetch_profile_import_state",
+                "prepare_profile_import",
+                "commit_profile_import",
+                "cancel_profile_import",
+                "save_config",
+                "delete_note",
+                "uninstall_plugin",
+            }:
+                await websocket.send_json({
+                    "type": "system_toast",
+                    "session_id": session_id,
+                    "content": "临时会话处于无记忆隔离模式，此操作不可用。"
+                })
+                continue
 
             # === [通道 A：轻量级 UI 数据同步] ===
             if cmd_type == "fetch_news":
@@ -174,6 +289,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                     await websocket.send_json({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
                 except Exception:
                     await websocket.send_json({"type": "memory_data", "content": []})
+                await websocket.send_json({"type": "profile_import_state", "content": vault_os.get_profile_import_state()})
             elif cmd_type == "resolve_memory_conflict":
                 result = await asyncio.to_thread(
                     vault_os.resolve_memory_conflict,
@@ -182,6 +298,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 )
                 await event_bus.publish({"type": "system_toast", "content": result.get("message", "")})
                 await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
+                await event_bus.publish({"type": "profile_import_state", "content": vault_os.get_profile_import_state()})
                 try:
                     await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
                 except Exception:
@@ -199,6 +316,8 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                                 with open(manifest_file, 'r', encoding='utf-8') as mf:
                                     info = json.load(mf)
                                     info['plugin_id'] = p # 强行把物理文件夹名注入进去，作为唯一 ID
+                                    normalize_manifest_security(info, p)
+                                    info['plugin_ui_token'] = plugin_security_manager.plugin_ui_token(p)
                                     plugins_info.append(info)
                             except Exception as e:
                                 print(f" [VPM] 解析插件 {p} 契约失败: {e}")
@@ -262,18 +381,70 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 async def run_import():
                     result = await asyncio.to_thread(vault_os.process_profile_import, request.get("content", ""))
                     await event_bus.publish({"type": "system_toast", "content": result})
+                    await event_bus.publish({"type": "profile_import_state", "content": vault_os.get_profile_import_state()})
                     await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
                     try:
                         await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
                     except Exception: pass
                 asyncio.create_task(run_import())
 
+            elif cmd_type == "fetch_profile_import_state":
+                await websocket.send_json({"type": "profile_import_state", "content": vault_os.get_profile_import_state()})
+
+            elif cmd_type == "prepare_profile_import":
+                async def run_prepare_import():
+                    result = await asyncio.to_thread(vault_os.prepare_profile_import, request.get("content", ""))
+                    event_type = "profile_import_preview" if result.get("ok") else "profile_import_error"
+                    await event_bus.publish({"type": event_type, "content": result})
+                    await event_bus.publish({"type": "profile_import_state", "content": result.get("state", vault_os.get_profile_import_state())})
+                    if result.get("message"):
+                        await event_bus.publish({"type": "system_toast", "content": result.get("message")})
+                asyncio.create_task(run_prepare_import())
+
+            elif cmd_type == "commit_profile_import":
+                async def run_commit_import():
+                    result = await asyncio.to_thread(vault_os.commit_profile_import, request.get("session_id", ""))
+                    event_type = "profile_import_done" if result.get("ok") else "profile_import_error"
+                    await event_bus.publish({"type": event_type, "content": result})
+                    await event_bus.publish({"type": "profile_import_state", "content": result.get("state", vault_os.get_profile_import_state())})
+                    await event_bus.publish({"type": "system_toast", "content": result.get("message", "")})
+                    await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
+                    try:
+                        await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
+                    except Exception: pass
+                asyncio.create_task(run_commit_import())
+
+            elif cmd_type == "cancel_profile_import":
+                result = await asyncio.to_thread(vault_os.cancel_profile_import, request.get("session_id", ""))
+                await websocket.send_json({"type": "profile_import_state", "content": result.get("state", vault_os.get_profile_import_state())})
+                await websocket.send_json({"type": "system_toast", "content": result.get("message", "")})
+
             # === [通道 C：核心智能体网关 (重型推理)] ===
             elif "message" in request:
                 user_msg = request.get("message", "")
                 if not user_msg: continue
-                # 收到消息后，丢给独立引擎去跑，当前循环立刻进入下一次等待
-                asyncio.create_task(spawn_agent_task(raw_data, real_loop, vault_os))
+                if session_mode == "temp":
+                    temp_runtime = session_manager.get_temp_runtime(session_id)
+                    if not temp_runtime:
+                        await websocket.send_json({
+                            "type": "system_toast",
+                            "session_id": session_id,
+                            "content": "临时会话已结束，请重新开启。"
+                        })
+                        continue
+                    request["thread_id"] = session_id
+                    request["session_id"] = session_id
+                    asyncio.create_task(
+                        spawn_temp_agent_task(
+                            request,
+                            real_loop,
+                            temp_runtime,
+                            session_manager.is_temp_open
+                        )
+                    )
+                else:
+                    # 收到消息后，丢给独立引擎去跑，当前循环立刻进入下一次等待
+                    asyncio.create_task(spawn_agent_task(json.dumps(request, ensure_ascii=False), real_loop, vault_os))
 
     except WebSocketDisconnect:
         print(" [断开连接] 前端 UI 已下线/关闭。")
@@ -290,6 +461,9 @@ def mount_vpm_plugins():
         # 如果插件包含后端路由文件
         if os.path.isdir(plugin_path) and os.path.exists(api_file):
             try:
+                if not plugin_security_manager.is_first_party(plugin_name):
+                    print(f" [VPM Security] Skipping third-party api.py import for plugin: {plugin_name}")
+                    continue
                 # 动态导入 Python 模块
                 spec = importlib.util.spec_from_file_location(f"vpm.plugins.{plugin_name}", api_file)
                 plugin_module = importlib.util.module_from_spec(spec)

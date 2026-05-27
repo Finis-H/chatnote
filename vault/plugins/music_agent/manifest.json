@@ -4,6 +4,11 @@
   "author": "Vault Core",
   "description": "Vault OS 官方基础组件。提供沉浸式的赛博朋克音乐播放与本地资产录入功能。",
   "tags": ["核心组件", "多媒体"],
+  "security": {
+    "trust": "first_party",
+    "permissions": ["native_backend", "plugin_storage", "rag_write", "ui_commands", "system_config"],
+    "sensitive_reason": "Official music plugin reads local music assets, updates its own RAG entries, opens its UI panel, and may use the configured model for lyric analysis."
+  },
   "type": "function",
   "function": {
     "name": "play_music_playlist",

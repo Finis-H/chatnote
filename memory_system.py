@@ -142,10 +142,16 @@ class MemoryMeta(SQLModel, table=True):
 
 class MemoryRepository:
     PROFILE_KEYS = ("coding_style", "communication", "interests", "facts")
+    SINGLE_VALUE_PREFERENCE_DETAILS = {"favorite_food"}
+    NEGATIVE_PREFERENCE_DETAILS = {"disliked_food"}
+    PREFERENCE_DETAILS = SINGLE_VALUE_PREFERENCE_DETAILS | NEGATIVE_PREFERENCE_DETAILS | {"food_preference"}
     PENDING_TTL_DAYS = 3
+    BUFFER_BATCH_SIZE = 5
+    BUFFER_IDLE_SECONDS = 10 * 60
 
     def __init__(self, vault_root=VAULT_ROOT):
         self.vault_root = vault_root
+        self.buffer_path = os.path.join(vault_root, "event_buffer.jsonl")
         sqlite_url = f"sqlite:///{os.path.join(vault_root, 'vault_core.db')}"
         self.engine = create_engine(sqlite_url, echo=False, connect_args={"check_same_thread": False})
         SQLModel.metadata.create_all(self.engine)
@@ -187,6 +193,10 @@ class MemoryRepository:
                 session.add(MemoryMeta(key="schema_version", value="2"))
             session.commit()
         self.settle_expired_pending()
+
+    def _get_meta(self, session, key, default=""):
+        meta = session.get(MemoryMeta, key)
+        return meta.value if meta else default
 
     def empty_profile(self):
         return {key: [] for key in self.PROFILE_KEYS}
@@ -247,7 +257,8 @@ class MemoryRepository:
 
     def get_l2_context_text(self, user_input):
         with Session(self.engine) as session:
-            known = [row.name for row in session.exec(select(Entity)).all()]
+            entities = session.exec(select(Entity)).all()
+            known = {row.name: _json_load(row.aliases_json, []) for row in entities}
             known_set = set(known)
             matched = set(entity for entity in MemoryRouter().resolve_entities(user_input, known) if entity in known_set)
             for relation_type in MemoryRouter.resolve_relation_types(user_input):
@@ -265,6 +276,10 @@ class MemoryRepository:
                         matched.add(target.name)
 
             context_parts = []
+            boss = session.get(Entity, "e_boss")
+            boss_content = self._entity_snapshot_text_from_session(session, boss) if boss else ""
+            if boss_content:
+                context_parts.append(f"【Boss 当前 L2 画像摘要】\n{boss_content}")
             for entity_name in sorted(entity for entity in matched if entity != "Boss"):
                 entity = self.get_entity_by_name(session, entity_name)
                 content = self._entity_snapshot_text_from_session(session, entity)
@@ -279,6 +294,17 @@ class MemoryRepository:
                         f"【实体专属事实源 - {entity.name}】\n"
                         "本地实体档案暂无记录。回答该实体问题时，禁止套用 Boss 自己的画像或模型常识。"
                     )
+            cognitive_rows = session.exec(select(L2CognitiveSnapshot)).all()
+            cognitive_lines = []
+            text = str(user_input or "")
+            for row in cognitive_rows:
+                if row.domain and row.domain in text:
+                    if row.macro_vision:
+                        cognitive_lines.append(f"[{row.domain}] 宏观规划: {row.macro_vision}")
+                    if row.current_focus:
+                        cognitive_lines.append(f"[{row.domain}] 当前焦点: {row.current_focus}")
+            if cognitive_lines:
+                context_parts.append("【命中认知快照】\n" + "\n".join(cognitive_lines))
             return "\n\n".join(context_parts)
 
     def _entity_snapshot_text_from_session(self, session, entity):
@@ -378,6 +404,131 @@ class MemoryRepository:
                 })
             return sorted(result, key=lambda item: item.get("created_at") or "", reverse=True)[:limit]
 
+    def append_buffer_item(self, text, thread_id="global"):
+        os.makedirs(self.vault_root, exist_ok=True)
+        record = {
+            "buffer_id": f"buf_{uuid.uuid4().hex[:12]}",
+            "thread_id": thread_id or "global",
+            "text": str(text or "").strip(),
+            "created_at": _now(),
+        }
+        if not record["text"]:
+            return {"queued": False, "reason": "empty"}
+        with open(self.buffer_path, "a", encoding="utf-8") as f:
+            f.write(_json_dump(record) + "\n")
+        return {"queued": True, "buffer_id": record["buffer_id"]}
+
+    def _read_buffer_records(self):
+        if not os.path.exists(self.buffer_path):
+            return []
+        records = []
+        with open(self.buffer_path, "r", encoding="utf-8") as f:
+            for index, line in enumerate(f, start=1):
+                data = _json_load(line.strip(), None)
+                if isinstance(data, dict):
+                    data["_cursor"] = index
+                    records.append(data)
+        return records
+
+    def get_unprocessed_buffer_records(self, session):
+        cursor = int(self._get_meta(session, "last_buffer_cursor", "0") or 0)
+        return [item for item in self._read_buffer_records() if int(item.get("_cursor", 0)) > cursor]
+
+    def _buffer_should_flush(self, records, force=False):
+        if force:
+            return bool(records)
+        if len(records) >= self.BUFFER_BATCH_SIZE:
+            return True
+        if not records:
+            return False
+        try:
+            oldest = datetime.fromisoformat(records[0].get("created_at"))
+        except Exception:
+            return False
+        return (datetime.now() - oldest).total_seconds() >= self.BUFFER_IDLE_SECONDS
+
+    def flush_event_buffer(self, extractor, force=False):
+        self.settle_expired_pending()
+        with Session(self.engine) as session:
+            records = self.get_unprocessed_buffer_records(session)
+            if not self._buffer_should_flush(records, force=force):
+                return {
+                    "ok": True,
+                    "processed": 0,
+                    "queued": len(records),
+                    "pending": len(session.exec(select(StagedEvent).where(StagedEvent.status == "PENDING")).all()),
+                    "message": f"缓冲池尚未达到批处理阈值：当前 {len(records)} 条，已处理 0 条。",
+                }
+            try:
+                buffer_count = len(records)
+                routed_events = extractor(records) if extractor else []
+                if isinstance(routed_events, dict):
+                    routed_events = [routed_events]
+                routed_events = [item for item in (routed_events or []) if isinstance(item, dict)]
+                processed = self._submit_events_grouped_in_session(session, routed_events)
+                self._set_meta(session, "last_buffer_cursor", str(records[-1]["_cursor"]))
+                self._set_meta(session, "last_settlement_time", _now())
+                session.commit()
+                pending = len(session.exec(select(StagedEvent).where(StagedEvent.status == "PENDING")).all())
+                return {
+                    "ok": True,
+                    "processed": processed,
+                    "queued": 0,
+                    "pending": pending,
+                    "message": f"缓冲池 {buffer_count} 条，已提取并处理 {processed} 条标准记忆事件，当前待审 {pending} 条。",
+                }
+            except Exception as e:
+                session.rollback()
+                return {
+                    "ok": False,
+                    "processed": 0,
+                    "queued": len(records),
+                    "pending": len(session.exec(select(StagedEvent).where(StagedEvent.status == "PENDING")).all()),
+                    "message": f"记忆缓冲池处理失败：{e}",
+                }
+
+    def submit_events_grouped(self, routed_events):
+        self.settle_expired_pending()
+        with Session(self.engine) as session:
+            try:
+                processed = self._submit_events_grouped_in_session(session, routed_events)
+                self._set_meta(session, "last_settlement_time", _now())
+                session.commit()
+                return processed
+            except Exception:
+                session.rollback()
+                raise
+
+    def _submit_events_grouped_in_session(self, session, routed_events):
+        grouped = sorted(
+            routed_events or [],
+            key=lambda item: (
+                str(item.get("target_entity") or "Boss"),
+                str(item.get("action_category") or "PROFILE"),
+            ),
+        )
+        processed = 0
+        for routed in grouped:
+            routed = MemoryRouter().route(routed)
+            if not routed:
+                continue
+            target = self.get_entity_by_name(session, routed.get("target_entity") or "Boss")
+            stage = self._build_stage(session, target, routed)
+            if stage:
+                session.add(stage)
+                processed += 1
+                continue
+            if routed.pop("_drop_event", False):
+                continue
+            event, review = self._build_merged_event(session, target, routed, status="MERGED")
+            session.add(event)
+            session.add(review)
+            self._apply_event_to_snapshots(session, event, review)
+            processed += 1
+        event_count = len(session.exec(select(MemoryEvent)).all())
+        self._set_meta(session, "last_analyzed_cursor", str(event_count))
+        return processed
+
     def submit_event(self, routed):
         self.settle_expired_pending()
         with Session(self.engine) as session:
@@ -401,12 +552,13 @@ class MemoryRepository:
             return event.event_id, review.status
 
     def _build_stage(self, session, target, routed):
-        category = routed.get("category") or routed.get("action_detail") or "facts"
+        category = self._category_for_routed(routed)
         new_trait = routed.get("new_trait") or routed.get("context") or ""
         confidence = float(routed.get("confidence", 1.0) or 0)
         requires_review = bool(routed.get("requires_review")) or confidence < 0.7
         review_type = routed.get("review_type") or "NEW"
         old_trait = None
+        action_detail = str(routed.get("action_detail") or "").lower()
 
         if routed.get("action_category") in {"RELATION", "ENTITY"} and routed.get("relation_type"):
             relation_type = routed.get("relation_type")
@@ -426,15 +578,28 @@ class MemoryRepository:
 
         if routed.get("action_category") in {"PROFILE", "ENTITY"}:
             profile = self._profile_for_update(session, target.entity_id)
-            if target.entity_id == "e_boss" and category == "facts":
-                old_trait, old_name = MemoryRouter.find_existing_name_fact(profile)
-                new_name = MemoryRouter.extract_identity_name(new_trait)
-                if old_name and new_name and old_name != new_name:
+            if target.entity_id == "e_boss" and action_detail in {"name", "identity"}:
+                old_trait = self._latest_single_value_trait(session, target.entity_id, {"name", "identity"})
+                if old_trait and old_trait != new_trait:
                     review_type = "CONFLICT"
                     requires_review = True
-                elif old_name and new_name and old_name == new_name:
+                elif old_trait and old_trait == new_trait:
                     routed["_drop_event"] = True
                     return None
+            if target.entity_id == "e_boss" and action_detail in self.SINGLE_VALUE_PREFERENCE_DETAILS:
+                old_trait = self._latest_single_value_trait(session, target.entity_id, {action_detail})
+                if old_trait and old_trait != new_trait:
+                    review_type = "CONFLICT"
+                    requires_review = True
+                elif old_trait and old_trait == new_trait:
+                    routed["_drop_event"] = True
+                    return None
+            if target.entity_id == "e_boss" and action_detail in self.NEGATIVE_PREFERENCE_DETAILS:
+                conflict_trait = self._conflicting_preference_trait(session, target.entity_id, action_detail, new_trait)
+                if conflict_trait:
+                    old_trait = conflict_trait
+                    review_type = "CONFLICT"
+                    requires_review = True
             if not requires_review and self._is_duplicate(profile, category, new_trait):
                 routed["_drop_event"] = True
                 return None
@@ -461,12 +626,13 @@ class MemoryRepository:
         )
 
     def _build_merged_event(self, session, target, routed, status="MERGED", review_type=None, old_trait=None, action_detail=None):
+        detail = action_detail or routed.get("action_detail", "facts")
         event = MemoryEvent(
             event_id=f"evt_{uuid.uuid4().hex[:12]}",
             actor_id="e_boss",
             target_id=target.entity_id,
             action_category=routed.get("action_category", "PROFILE"),
-            action_detail=action_detail or routed.get("action_detail", "facts"),
+            action_detail=detail,
             context=routed.get("context", ""),
             raw_reference=routed.get("raw_reference"),
             payload_json=_json_dump(routed),
@@ -475,7 +641,7 @@ class MemoryRepository:
             event_id=event.event_id,
             status=status,
             review_type=review_type or routed.get("review_type") or "NEW",
-            category=routed.get("category") or event.action_detail or "facts",
+            category=self._category_for_routed(routed),
             old_trait=old_trait,
             new_trait=routed.get("new_trait") or event.context,
             reason=routed.get("reason"),
@@ -608,6 +774,7 @@ class MemoryRepository:
             snapshot.last_event_id = event.event_id
             snapshot.last_updated = _now()
             session.add(snapshot)
+            self._rebuild_cognitive_snapshot(session, domain, event.event_id)
             return
 
         if event.action_category in {"RELATION", "ENTITY"} and payload.get("relation_type"):
@@ -630,6 +797,43 @@ class MemoryRepository:
             profile[category].append(review.new_trait)
         snapshot.core_profile_json = _json_dump(profile)
         snapshot.last_event_id = event.event_id
+        snapshot.last_updated = _now()
+        session.add(snapshot)
+        self._rebuild_entity_profile_snapshot(session, event.target_id, event.event_id)
+
+    def _rebuild_entity_profile_snapshot(self, session, entity_id, event_id=None):
+        snapshot = session.get(L2EntitySnapshot, entity_id)
+        if not snapshot:
+            snapshot = L2EntitySnapshot(entity_id=entity_id, core_profile_json=_json_dump(self.empty_profile()))
+        profile = self.empty_profile()
+        single_value_traits = {}
+        rows = session.exec(
+            select(MemoryEvent, EventReview)
+            .join(EventReview, EventReview.event_id == MemoryEvent.event_id)
+            .where(
+                MemoryEvent.target_id == entity_id,
+                MemoryEvent.action_category.in_(["PROFILE", "ENTITY", "RELATION"]),
+                EventReview.status.in_(["MERGED", "AUTO_OVERWRITTEN"]),
+            )
+            .order_by(MemoryEvent.timestamp.asc())
+        ).all()
+        for memory_event, review in rows:
+            value = review.new_trait or memory_event.context
+            if not value:
+                continue
+            category = review.category if review.category in self.PROFILE_KEYS else "facts"
+            payload = _json_load(memory_event.payload_json, {})
+            detail = (payload.get("action_detail") or memory_event.action_detail or "").lower()
+            if detail in {"name", "identity"}:
+                previous = single_value_traits.get(detail)
+                if previous and previous in profile[category]:
+                    profile[category].remove(previous)
+                single_value_traits[detail] = value
+            if value not in profile[category]:
+                profile[category].append(value)
+        snapshot.core_profile_json = _json_dump(profile)
+        if event_id:
+            snapshot.last_event_id = event_id
         snapshot.last_updated = _now()
         session.add(snapshot)
 
@@ -681,6 +885,62 @@ class MemoryRepository:
         session.flush()
         self._refresh_active_relations(session, source.entity_id, event.event_id)
 
+    def _latest_single_value_trait(self, session, target_id, action_details):
+        rows = session.exec(
+            select(MemoryEvent, EventReview)
+            .join(EventReview, EventReview.event_id == MemoryEvent.event_id)
+            .where(
+                MemoryEvent.target_id == target_id,
+                EventReview.status.in_(["MERGED", "AUTO_OVERWRITTEN"]),
+            )
+            .order_by(MemoryEvent.timestamp.desc())
+        ).all()
+        for event, review in rows:
+            payload = _json_load(event.payload_json, {})
+            detail = (payload.get("action_detail") or event.action_detail or "").lower()
+            if detail not in action_details:
+                continue
+            value = review.new_trait or event.context
+            if value:
+                return value
+        return None
+
+    def _category_for_routed(self, routed):
+        category = routed.get("category")
+        detail = str(routed.get("action_detail") or "").lower()
+        if category in self.PROFILE_KEYS:
+            return category
+        if detail in self.PREFERENCE_DETAILS or detail == "interests":
+            return "interests"
+        if detail in {"communication", "coding_style"}:
+            return detail
+        return "facts"
+
+    def _conflicting_preference_trait(self, session, target_id, action_detail, new_trait):
+        new_object = MemoryRouter.preference_object(action_detail, new_trait)
+        if not new_object:
+            return None
+        rows = session.exec(
+            select(MemoryEvent, EventReview)
+            .join(EventReview, EventReview.event_id == MemoryEvent.event_id)
+            .where(
+                MemoryEvent.target_id == target_id,
+                MemoryEvent.action_category == "PROFILE",
+                EventReview.status.in_(["MERGED", "AUTO_OVERWRITTEN"]),
+            )
+            .order_by(MemoryEvent.timestamp.desc())
+        ).all()
+        positive_details = self.SINGLE_VALUE_PREFERENCE_DETAILS | {"interests", "food_preference"}
+        for event, review in rows:
+            payload = _json_load(event.payload_json, {})
+            detail = (payload.get("action_detail") or event.action_detail or "").lower()
+            if detail not in positive_details:
+                continue
+            old_trait = review.new_trait or event.context
+            if MemoryRouter.preference_object(detail, old_trait) == new_object:
+                return old_trait
+        return None
+
     def _refresh_active_relations(self, session, source_id, event_id=None):
         snapshot = session.get(L2EntitySnapshot, source_id)
         if not snapshot:
@@ -719,6 +979,39 @@ class MemoryRepository:
                 parts.append("对接策略: " + str(value["actionable_insight"]))
             return "\n".join(parts) or json.dumps(value, ensure_ascii=False)
         return str(value or "")
+
+    def _rebuild_cognitive_snapshot(self, session, domain, event_id=None):
+        rows = session.exec(
+            select(MemoryEvent, EventReview)
+            .join(EventReview, EventReview.event_id == MemoryEvent.event_id)
+            .where(
+                MemoryEvent.action_category == "COGNITIVE",
+                EventReview.status.in_(["MERGED", "AUTO_OVERWRITTEN"]),
+            )
+            .order_by(MemoryEvent.timestamp.asc())
+        ).all()
+        macro_parts = []
+        focus_parts = []
+        for memory_event, review in rows:
+            payload = _json_load(memory_event.payload_json, {})
+            if (payload.get("domain") or review.category or "General") != domain:
+                continue
+            text = self._cognition_text(payload.get("new_cognition") or memory_event.context)
+            if not text:
+                continue
+            route_category = (payload.get("route_category") or "LEARN").upper()
+            if route_category in {"PLAN", "LEARN"}:
+                macro_parts.append(text)
+            elif route_category in {"BUILD", "DEBUG"}:
+                focus_parts.append(text)
+        snapshot = session.get(L2CognitiveSnapshot, domain) or L2CognitiveSnapshot(domain=domain)
+        snapshot.macro_vision = "\n".join(dict.fromkeys(macro_parts[-5:]))
+        snapshot.current_focus = "\n".join(dict.fromkeys(focus_parts[-5:]))
+        snapshot.current_status = "ACTIVE"
+        if event_id:
+            snapshot.last_event_id = event_id
+        snapshot.last_updated = _now()
+        session.add(snapshot)
 
     def _is_duplicate(self, profile, category, new_trait):
         if category not in profile or not new_trait:
@@ -781,10 +1074,6 @@ class MemoryRouter:
         "家人": ("父亲", "母亲", "伴侣", "孩子"),
         "亲人": ("父亲", "母亲", "伴侣", "孩子"),
     }
-    NAME_PATTERNS = (
-        re.compile(r"(?:用户的名字|用户名字|用户姓名|用户的姓名|用户真实姓名|真实姓名|姓名|名字)\s*(?:是|叫|为|:|：)?\s*([\u4e00-\u9fffA-Za-z][\u4e00-\u9fffA-Za-z·.\-]{0,30})"),
-        re.compile(r"(?:我叫|我名叫|我名字叫|我的名字是|我的姓名是|我的真实姓名是)\s*([\u4e00-\u9fffA-Za-z][\u4e00-\u9fffA-Za-z·.\-]{0,30})"),
-    )
     NAME_STOP_WORDS = {"用户", "名字", "姓名", "真实姓名", "父亲", "母亲", "爸爸", "妈妈", "朋友", "老板", "喜欢", "讨厌", "不是", "不知道", "什么", "多少", "谁", "吗", "呢"}
 
     @classmethod
@@ -795,41 +1084,6 @@ class MemoryRouter:
             if any(alias in text for alias in aliases):
                 matched.add(relation_type)
         return sorted(matched)
-
-    @classmethod
-    def extract_relation_fact(cls, text, explicit_entity=None):
-        text = str(text or "")
-        relation_type = None
-        role_name = explicit_entity if explicit_entity and explicit_entity != "Boss" else None
-        for candidate_type, aliases in cls.RELATION_ALIASES.items():
-            if role_name and role_name in aliases:
-                relation_type = candidate_type
-                break
-            if any(alias in text for alias in aliases):
-                relation_type = candidate_type
-                role_name = cls.ROLE_ENTITY_BY_RELATION.get(candidate_type)
-                break
-        if not relation_type:
-            return None
-
-        person_name = None
-        role_words = "|".join(re.escape(alias) for alias in cls.RELATION_ALIASES[relation_type])
-        patterns = (
-            rf"(?:我的|我)?(?:{role_words})(?:的)?(?:名字|姓名)?(?:叫|是|为)\s*([\u4e00-\u9fffA-Za-z][\u4e00-\u9fffA-Za-z·.\-]{{0,30}})",
-            rf"([\u4e00-\u9fffA-Za-z][\u4e00-\u9fffA-Za-z·.\-]{{0,30}})(?:是|作为)(?:我的|我)?(?:{role_words})",
-        )
-        for pattern in patterns:
-            match = re.search(pattern, text)
-            if match:
-                candidate = re.split(r"[，。；,;！!？?\s]", match.group(1).strip(), maxsplit=1)[0]
-                if candidate and candidate not in cls.NAME_STOP_WORDS and candidate not in cls.ROLE_ENTITY_BY_RELATION.values():
-                    person_name = candidate
-                    break
-        return {
-            "relation_type": relation_type,
-            "role_name": role_name or cls.ROLE_ENTITY_BY_RELATION.get(relation_type) or relation_type,
-            "person_name": person_name,
-        }
 
     @classmethod
     def aliases_for(cls, entity_name):
@@ -873,37 +1127,18 @@ class MemoryRouter:
         return re.sub(r"[，,。.!！?？\s]", "", text)
 
     @classmethod
-    def extract_identity_name(cls, text):
-        if not text:
-            return None
-        text = str(text).strip()
-        if cls.extract_external_entity(text):
-            return None
-        for pattern in cls.NAME_PATTERNS:
-            match = pattern.search(text)
-            if not match:
-                continue
-            name = match.group(1).strip(" ，,。.;；!！?？\"'“”‘’")
-            name = re.split(r"[，,。.;；!！?？\s]", name, maxsplit=1)[0].strip()
-            if name and name not in cls.NAME_STOP_WORDS:
-                return name
-        return None
-
-    @classmethod
-    def find_existing_name_fact(cls, profile):
-        for fact in profile.get("facts", []):
-            name = cls.extract_identity_name(fact)
-            if name:
-                return fact, name
-        return None, None
-
-    @classmethod
-    def extract_external_entity(cls, text):
-        for canonical, aliases in cls.ENTITY_ALIASES.items():
-            for alias in aliases:
-                if re.search(rf"(我|用户|主人|Boss|boss|BOSS)的?{re.escape(alias)}|{re.escape(alias)}", str(text or "")):
-                    return canonical
-        return None
+    def preference_object(cls, action_detail, trait):
+        text = cls.normalize_trait(trait)
+        for token in (
+            "最不喜欢吃", "不喜欢吃", "讨厌吃",
+            "最喜欢吃", "最爱吃", "喜欢吃", "爱吃",
+            "最不喜欢", "不喜欢", "讨厌",
+            "最喜欢", "最爱", "喜欢", "爱",
+            "水果是",
+        ):
+            text = text.replace(token, "")
+        text = re.sub(r"^(用户|Boss|我|本人|自己)", "", text)
+        return text.strip()
 
     def route(self, candidate, llm_router=None):
         if not isinstance(candidate, dict):
@@ -911,94 +1146,6 @@ class MemoryRouter:
         if "target_entity" in candidate and "action_category" in candidate:
             return self._normalize_routed(candidate)
 
-        action = candidate.get("action") or candidate.get("type")
-        if action == "IGNORE":
-            return None
-        if action in {"SELF_PROFILE_UPDATE", "NEW"}:
-            trait_text = candidate.get("trait") or candidate.get("new_trait") or candidate.get("evidence", "")
-            relation = self.extract_relation_fact(trait_text)
-            if relation:
-                target_entity = relation.get("person_name") or relation.get("role_name")
-                return self._normalize_routed({
-                    "target_entity": target_entity,
-                    "action_category": "RELATION" if relation.get("person_name") else "ENTITY",
-                    "action_detail": candidate.get("category", "facts"),
-                    "category": candidate.get("category", "facts"),
-                    "context": trait_text,
-                    "new_trait": candidate.get("new_trait") or candidate.get("trait") or candidate.get("evidence", ""),
-                    "relation_type": relation.get("relation_type"),
-                    "source_entity": "Boss",
-                    "confidence": candidate.get("confidence", 1.0),
-                    "requires_review": candidate.get("requires_review", False),
-                })
-            inferred_entity = self.extract_external_entity(trait_text)
-            if inferred_entity:
-                return self._normalize_routed({
-                    "target_entity": inferred_entity,
-                    "action_category": "ENTITY",
-                    "action_detail": candidate.get("category", "facts"),
-                    "category": candidate.get("category", "facts"),
-                    "context": trait_text,
-                    "new_trait": trait_text,
-                    "confidence": candidate.get("confidence", 1.0),
-                    "requires_review": candidate.get("requires_review", False),
-                })
-            return self._normalize_routed({
-                "target_entity": "Boss",
-                "action_category": "PROFILE",
-                "action_detail": candidate.get("category", "facts"),
-                "category": candidate.get("category", "facts"),
-                "context": trait_text,
-                "new_trait": candidate.get("new_trait") or candidate.get("trait") or candidate.get("evidence", ""),
-                "confidence": candidate.get("confidence", 1.0),
-                "requires_review": candidate.get("requires_review", False),
-            })
-        if action == "ENTITY_UPDATE":
-            entity = self.sanitize_entity_name(candidate.get("entity"))
-            trait_text = candidate.get("trait") or candidate.get("new_trait") or ""
-            relation = self.extract_relation_fact(trait_text, explicit_entity=entity)
-            if relation:
-                target_entity = relation.get("person_name") or relation.get("role_name") or entity
-                return self._normalize_routed({
-                    "target_entity": target_entity,
-                    "action_category": "RELATION" if relation.get("person_name") else "ENTITY",
-                    "action_detail": candidate.get("category", "facts"),
-                    "category": candidate.get("category", "facts"),
-                    "context": trait_text,
-                    "new_trait": candidate.get("new_trait") or candidate.get("trait") or "",
-                    "relation_type": relation.get("relation_type"),
-                    "source_entity": "Boss",
-                    "confidence": candidate.get("confidence", 1.0),
-                    "requires_review": candidate.get("requires_review", False),
-                })
-            if not entity or entity == "Boss":
-                inferred = self.extract_external_entity(trait_text)
-                entity = inferred or "Boss"
-            return self._normalize_routed({
-                "target_entity": entity,
-                "action_category": "ENTITY" if entity != "Boss" else "PROFILE",
-                "action_detail": candidate.get("category", "facts"),
-                "category": candidate.get("category", "facts"),
-                "context": trait_text,
-                "new_trait": candidate.get("new_trait") or candidate.get("trait") or "",
-                "confidence": candidate.get("confidence", 1.0),
-                "requires_review": candidate.get("requires_review", False),
-            })
-        if action == "COGNITIVE_UPDATE":
-            cognition = candidate.get("new_cognition")
-            return self._normalize_routed({
-                "target_entity": candidate.get("domain", "General"),
-                "action_category": "COGNITIVE",
-                "route_category": candidate.get("action_category", "LEARN"),
-                "action_detail": candidate.get("domain", "General"),
-                "category": candidate.get("domain", "General"),
-                "domain": candidate.get("domain", "General"),
-                "context": json.dumps(cognition, ensure_ascii=False) if isinstance(cognition, dict) else str(cognition or ""),
-                "new_trait": json.dumps(cognition, ensure_ascii=False) if isinstance(cognition, dict) else str(cognition or ""),
-                "new_cognition": cognition,
-                "confidence": candidate.get("confidence", 1.0),
-                "requires_review": candidate.get("requires_review", False),
-            })
         if llm_router:
             routed = llm_router(candidate)
             if isinstance(routed, list):
@@ -1027,18 +1174,20 @@ class MemoryRouter:
 
     def resolve_entities(self, text, known_entities):
         text = str(text or "")
+        if isinstance(known_entities, dict):
+            known_aliases = known_entities
+            known_names = set(known_entities)
+        else:
+            known_names = set(known_entities or [])
+            known_aliases = {name: self.ENTITY_ALIASES.get(name, (name,)) for name in known_names}
         matched = set()
         for group_word, group_entities in self.ENTITY_GROUPS.items():
             if group_word in text:
                 if group_word in {"家人", "亲人"}:
-                    matched.update(entity for entity in group_entities if entity in known_entities)
+                    matched.update(entity for entity in group_entities if entity in known_names)
                 else:
                     matched.update(group_entities)
-        for canonical, aliases in self.ENTITY_ALIASES.items():
-            if canonical in text or any(alias in text for alias in aliases):
-                matched.add(canonical)
-        for entity_name in known_entities:
-            aliases = self.ENTITY_ALIASES.get(entity_name, (entity_name,))
+        for entity_name, aliases in known_aliases.items():
             if entity_name in text or any(alias in text for alias in aliases):
                 matched.add(entity_name)
         return sorted(entity for entity in matched if self.sanitize_entity_name(entity) and entity != "Boss")
@@ -1129,6 +1278,25 @@ class MemoryGatekeeper:
                 results.append({"id": event_id, "status": status})
         return results
 
+    def enqueue_memory_observation(self, text, thread_id="global"):
+        return self.repo.append_buffer_item(text, thread_id=thread_id)
+
+    def flush_event_buffer(self, extractor, force=False):
+        with self.memory_lock:
+            return self.repo.flush_event_buffer(extractor, force=force)
+
+    def submit_standard_events(self, events, raw_reference=None):
+        normalized = []
+        for event in events or []:
+            if not isinstance(event, dict):
+                continue
+            item = dict(event)
+            if raw_reference and not item.get("raw_reference"):
+                item["raw_reference"] = raw_reference
+            normalized.append(item)
+        with self.memory_lock:
+            return self.repo.submit_events_grouped(normalized)
+
     def resolve_memory_conflict(self, memory_id, decision):
         with self.memory_lock:
             return self.settlement.resolve_review(memory_id, decision)
@@ -1153,7 +1321,7 @@ class MemoryGatekeeper:
 
     def resolve_entities(self, text):
         with Session(self.repo.engine) as session:
-            known = [row.name for row in session.exec(select(Entity)).all()]
+            known = {row.name: _json_load(row.aliases_json, []) for row in session.exec(select(Entity)).all()}
         return self.router.resolve_entities(text, known)
 
     def sanitize_entity_name(self, entity):

@@ -6,6 +6,7 @@ from trace_system import copy_current_context, reset_trace_context, trace_emitte
 
 # 创建一个专门跑重度 AI 任务的独立线程池
 ai_executor = ThreadPoolExecutor(max_workers=3)
+temp_ai_executor = ThreadPoolExecutor(max_workers=2)
 
 def _sync_real_brain_kickoff(payload_dict: dict, vault_os):
     """
@@ -35,6 +36,7 @@ async def spawn_agent_task(raw_data: str, main_loop: asyncio.AbstractEventLoop, 
     await event_bus.publish({
         "type": "status",
         "content": "thinking",
+        "session_id": "main",
         "trace_id": trace_id,
         "thread_id": thread_id
     })
@@ -63,6 +65,7 @@ async def spawn_agent_task(raw_data: str, main_loop: asyncio.AbstractEventLoop, 
             await event_bus.publish({
                 "type": "stream", 
                 "content": result[i:i+chunk_size],
+                "session_id": "main",
                 "thread_id": thread_id
             })
         memory_items = vault_os.gatekeeper.fetch_memory()
@@ -77,6 +80,7 @@ async def spawn_agent_task(raw_data: str, main_loop: asyncio.AbstractEventLoop, 
         trace_emitter.timeout_trace(result)
         await event_bus.publish({
             "type": "stream",
+            "session_id": "main",
             "thread_id": thread_id,
             "content": result
         })
@@ -84,6 +88,7 @@ async def spawn_agent_task(raw_data: str, main_loop: asyncio.AbstractEventLoop, 
         trace_emitter.mark_response_done("FAILED", "主回复失败", str(e))
         await event_bus.publish({
             "type": "stream",
+            "session_id": "main",
             "thread_id": thread_id,
             "content": f"\n\n [内核崩溃] 大脑推理层异常: {str(e)}"
         })
@@ -91,6 +96,74 @@ async def spawn_agent_task(raw_data: str, main_loop: asyncio.AbstractEventLoop, 
         # 无论成功还是失败，关闭前端的 thinking 动画
         await event_bus.publish({
             "type": "status",
-            "content": "done"
+            "content": "done",
+            "session_id": "main"
         })
         reset_trace_context(trace_tokens)
+
+
+async def spawn_temp_agent_task(payload: dict, main_loop: asyncio.AbstractEventLoop, temp_runtime, is_session_open):
+    """
+    临时会话任务入口：不绑定 Trace，不读取主记忆，迟到结果按 session_id 丢弃。
+    """
+    session_id = payload.get("session_id", "")
+    thread_id = payload.get("thread_id", session_id or "temp")
+    display_message = payload.get("display_message", payload.get("message", ""))
+
+    if not session_id or not is_session_open(session_id):
+        return
+
+    await event_bus.publish({
+        "type": "status",
+        "content": "thinking",
+        "session_id": session_id,
+        "thread_id": thread_id
+    })
+
+    try:
+        result = await asyncio.wait_for(
+            main_loop.run_in_executor(
+                temp_ai_executor,
+                _sync_real_brain_kickoff,
+                payload,
+                temp_runtime
+            ),
+            timeout=60
+        )
+        if not is_session_open(session_id):
+            return
+        chunk_size = 4
+        for i in range(0, len(result), chunk_size):
+            if not is_session_open(session_id):
+                return
+            await asyncio.sleep(0.02)
+            await event_bus.publish({
+                "type": "stream",
+                "content": result[i:i+chunk_size],
+                "session_id": session_id,
+                "thread_id": thread_id
+            })
+    except asyncio.TimeoutError:
+        if is_session_open(session_id):
+            await event_bus.publish({
+                "type": "stream",
+                "session_id": session_id,
+                "thread_id": thread_id,
+                "content": "临时会话任务超过 60 秒，已释放前端等待链路。迟到结果会被丢弃。"
+            })
+    except Exception as e:
+        if is_session_open(session_id):
+            await event_bus.publish({
+                "type": "stream",
+                "session_id": session_id,
+                "thread_id": thread_id,
+                "content": f"\n\n [临时会话异常] 大脑推理层异常: {str(e)}"
+            })
+    finally:
+        if is_session_open(session_id):
+            await event_bus.publish({
+                "type": "status",
+                "content": "done",
+                "session_id": session_id,
+                "thread_id": thread_id
+            })

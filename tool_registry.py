@@ -1,6 +1,7 @@
 import os
 import json
 from main import VAULT_ROOT
+from plugin_security import normalize_manifest_security
 
 class ToolRegistry:
     def __init__(self, tools_dir=None):
@@ -16,7 +17,7 @@ class ToolRegistry:
                     "name": "web_search",
                     # ✅ 方案 A 的核心：重写工具描述 (Description)
                     # 在这里给大模型下达最高指令，强迫它在调用搜索前先充当翻译官！
-                    "description": "这是一个强大的全球网络搜索引擎。【最高指令】：1. 当检索全球前沿科技动态、AI大模型进展、外企新闻时，你必须将搜索词翻译为纯英文再传入！2. 当检索【天气、股市、新闻、比赛结果】等对时间极度敏感的实时信息时，你 **必须** 将系统的当前日期（年月日）直接强制拼接在搜索词中！例如：绝对不能传入 '今天上海天气'，必须传入 '上海天气 2026年5月23日'。",
+                    "description": "这是一个带多通道降级的全球网络搜索引擎，返回标题、摘要、URL、来源、日期和搜索时间等元数据；如果只能拿到无时间限制的结果，会明确标注“未验证时效性”。【最高指令】：1. 当检索全球前沿科技动态、AI大模型进展、外企新闻时，你必须将搜索词翻译为纯英文再传入！2. 当检索【天气、股市、新闻、比赛结果】等对时间极度敏感的实时信息时，你 **必须** 将系统的当前日期（年月日）直接强制拼接在搜索词中！例如：绝对不能传入 '今天上海天气'，必须传入 '上海天气 2026年5月23日'。3. 回答必须优先引用工具返回的 URL/日期/来源；如果工具报告失败、为空或未验证时效性，必须如实说明，不要使用训练数据补编最新事实。",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -139,6 +140,11 @@ class ToolRegistry:
                     if "type" not in manifest:
                         manifest["type"] = "function"
 
+                    plugin_id = self._plugin_id_from_path(filepath)
+                    if plugin_id:
+                        manifest["plugin_id"] = plugin_id
+                    normalize_manifest_security(manifest, plugin_id)
+
                     self.tools.append(manifest)
                     self.registered_names.add(name)
                     print(f" [VPM 挂载] 外部插件契约已就绪: {name}")
@@ -146,6 +152,16 @@ class ToolRegistry:
             except Exception as e:
                 # 忽略普通的 json 报错（比如解析到 system_config 这种纯数据文件）
                 pass
+
+    def _plugin_id_from_path(self, filepath):
+        normalized = os.path.normpath(filepath)
+        parts = normalized.split(os.sep)
+        if "plugins" not in parts:
+            return ""
+        idx = parts.index("plugins")
+        if idx + 1 >= len(parts):
+            return ""
+        return parts[idx + 1]
 
     def get_tools(self):
         """直接将标准的 Tools 数组暴露给大模型接口"""

@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
-import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, currentNote, useNeuroLink } from './composables/useNeuroLink';
+import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, pluginPermissionRequest, currentNote, useNeuroLink } from './composables/useNeuroLink';
 import { activeAgentComponent, isImmersive } from './composables/useNeuroLink';
 import './assets/cyber-theme.css'; // 载入全局样式
 
@@ -14,7 +14,7 @@ const MemoryStaging = defineAsyncComponent(() => import('./views/MemoryStaging.v
 const SettingsView = defineAsyncComponent(() => import('./views/SettingsView.vue'));
 const VpmCenterView = defineAsyncComponent(() => import('./views/VpmCenterView.vue'));
 const ProfileImportView = defineAsyncComponent(() => import('./views/ProfileImportView.vue'));
-const { connectWebSocket, destroyLink, sendChatCommand, switchView, confirmDelete } = useNeuroLink();
+const { connectWebSocket, destroyLink, sendChatCommand, switchView, confirmDelete, startTempSession, respondPluginPermission } = useNeuroLink();
 const appWindow = getCurrentWindow();
 const isSidebarCollapsed = ref(false);
 
@@ -81,12 +81,15 @@ onUnmounted(async () => {
           <div class="nav-item" :class="{active: activeView==='vpm_center'}" @click="switchView('vpm_center')">
             <span class="icon">📦</span><span class="label">插件中心</span>
           </div>
+          <div class="nav-item" :class="{active: activeView==='temp_chat'}" @click="startTempSession">
+            <span class="icon">⏱</span><span class="label">临时会话</span>
+          </div>
         </div>
       </aside>
 
       <main class="center-viewport" :class="{ 'squeezed': activeAgentComponent && isImmersive }">
         <div class="view-content">
-          <TerminalView v-show="activeView === 'chat'" />
+          <TerminalView v-show="activeView === 'chat' || activeView === 'temp_chat'" />
           <KnowledgeListView v-if="activeView === 'news'" type="news" />
           <KnowledgeListView v-if="activeView === 'favorites'" type="favorites" />
           <NoteDetailView v-if="activeView === 'note_detail'" />
@@ -127,6 +130,31 @@ onUnmounted(async () => {
       </div>
     </div>
 
+    <div class="custom-modal-overlay" v-if="pluginPermissionRequest" @click.stop>
+      <div class="custom-modal permission-modal" @click.stop>
+        <div class="modal-icon">!</div>
+        <h3 class="modal-title">本轮任务需要插件权限确认</h3>
+        <div
+          class="permission-item"
+          v-for="item in (pluginPermissionRequest.items || [pluginPermissionRequest])"
+          :key="`${item.plugin_id || item.plugin_name}-${item.tool_name || 'tool'}`"
+        >
+          <p class="modal-desc">
+            插件 <span class="highlight-text">{{ item.plugin_name || item.plugin_id }}</span>
+            <span v-if="item.tool_name"> / {{ item.tool_name }}</span>
+            请求敏感权限：<span class="warning-text">{{ item.permissions?.join(', ') }}</span>
+          </p>
+          <p class="modal-desc">{{ item.reason }}</p>
+          <pre class="permission-preview">{{ JSON.stringify(item.preview || {}, null, 2) }}</pre>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="respondPluginPermission('deny')">拒绝</button>
+          <button class="btn-cancel" @click="respondPluginPermission('allow_once')">允许一次</button>
+          <button class="btn-confirm" @click="respondPluginPermission('allow_session')">本次会话允许</button>
+        </div>
+      </div>
+    </div>
+
     <div class="cyber-toast" :class="{ 'toast-visible': systemToast.show }">
       <span class="toast-icon">🩺</span><span class="toast-text">{{ systemToast.message }}</span>
     </div>
@@ -148,9 +176,9 @@ onUnmounted(async () => {
 .sidebar.collapsed .label { opacity: 0; pointer-events: none; }
 .side-right { border-right: none; border-left: 1px solid #1a1a1a; }
 .nav-group { padding: 15px 0; }
-.nav-item { padding: 12px 20px; cursor: pointer; display: flex; align-items: center; gap: 15px; color: #888; transition: all 0.2s; }
-.nav-item:hover, .nav-item.active { background: rgba(0, 255, 204, 0.05); color: #00ffcc; border-left: 2px solid #00ffcc; }
-.nav-item .icon { font-size: 18px; }
+.nav-item { padding: 12px 20px; cursor: pointer; display: flex; align-items: center; gap: 15px; color: #888; transition: all 0.2s; border-left: 2px solid transparent; box-sizing: border-box; }
+.nav-item:hover, .nav-item.active { background: rgba(0, 255, 204, 0.05); color: #00ffcc; border-left-color: #00ffcc; }
+.nav-item .icon { width: 20px; flex: 0 0 20px; text-align: center; font-size: 18px; line-height: 1; }
 .badge { background: #ff4d4f; color: #fff; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 10px; margin-left: auto; }
 .pulse-anim { animation: pulse-glow 1.5s infinite; }
 
@@ -224,6 +252,10 @@ onUnmounted(async () => {
 .btn-cancel:hover { background: rgba(255,255,255,0.1); color: #fff; }
 .btn-confirm { background: rgba(255, 77, 79, 0.1); color: #ff4d4f; border: 1px solid rgba(255, 77, 79, 0.4); }
 .btn-confirm:hover { background: #ff4d4f; color: #000; box-shadow: 0 0 15px rgba(255, 77, 79, 0.4); }
+.permission-modal { width: 520px; text-align: left; }
+.permission-item { border-top: 1px solid #262626; padding-top: 12px; margin-top: 12px; }
+.permission-item:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+.permission-preview { max-height: 160px; overflow: auto; background: rgba(255,255,255,0.04); border: 1px solid #333; padding: 12px; color: #ccc; white-space: pre-wrap; font-size: 12px; border-radius: 4px; }
 
 /* 滑动动画 */
 .slide-up-enter-active, .slide-up-leave-active { transition: all 0.3s ease; }

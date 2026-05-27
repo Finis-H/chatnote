@@ -2,18 +2,22 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import {
   globalMessages,
+  tempMessages,
   isThinking,
+  isTempSession,
   activeView,
   traceEvents,
   activeTraceId,
   isTracePanelOpen,
   traceSummary,
-  toggleTracePanel
+  toggleTracePanel,
+  useNeuroLink
 } from '../composables/useNeuroLink';
 import CyberMarkdown from '../components/CyberMarkdown.vue';
 
 const viewportRef = ref(null);
 const manuallyExpandedSpans = ref(new Set());
+const { endTempSession } = useNeuroLink();
 // 视觉切片状态：1 轮对话 = 1个User + 1个AI，6轮就是 12 条消息
 const PAGE_SIZE = 12; 
 const displayLimit = ref(PAGE_SIZE);
@@ -21,7 +25,7 @@ let isFetchingMore = false; // 防抖锁
 
 // ✨ 2. 消息解析引擎：分离纯文本与交互卡片
 const processedMessages = computed(() => {
-  let baseMessages = globalMessages.value;
+  let baseMessages = isTempSession.value ? tempMessages.value : globalMessages.value;
   if (baseMessages.length > displayLimit.value) {
     baseMessages = baseMessages.slice(-displayLimit.value);
   }
@@ -100,7 +104,7 @@ function toggleTraceNode(event) {
 }
 const scrollViewport = () => { if (viewportRef.value) viewportRef.value.scrollTop = viewportRef.value.scrollHeight; };
 // 监听正常对话的新消息触底
-watch([globalMessages, isThinking], () => {
+watch([globalMessages, tempMessages, isThinking], () => {
   // 如果当前正在往上翻看历史，不要强行把用户拽到底部
   if (!isFetchingMore) {
     nextTick(scrollViewport);
@@ -108,7 +112,7 @@ watch([globalMessages, isThinking], () => {
 }, { deep: true });
 // 监听视图切换时的置底
 watch(activeView, (newVal) => {
-  if (newVal === 'chat') {
+  if (newVal === 'chat' || newVal === 'temp_chat') {
     nextTick(scrollViewport);
   }
 });
@@ -116,7 +120,8 @@ watch(activeView, (newVal) => {
 const handleScroll = async (e) => {
   const container = e.target;
   // 触发条件：滚动到顶部，且还有未展示的历史数据
-  if (container.scrollTop === 0 && displayLimit.value < globalMessages.value.length) {
+  const sourceMessages = isTempSession.value ? tempMessages.value : globalMessages.value;
+  if (container.scrollTop === 0 && displayLimit.value < sourceMessages.length) {
     isFetchingMore = true;
     // 1. 记录加载前的历史总高度
     const previousHeight = container.scrollHeight;
@@ -137,18 +142,28 @@ const handleScroll = async (e) => {
   <div class="terminal-shell">
     <div class="terminal-toolbar">
       <div class="terminal-title">
-        <span class="terminal-name">主控终端</span>
+        <span class="terminal-name">{{ isTempSession ? '临时会话' : '主控终端' }}</span>
         <span class="terminal-state">{{ terminalStatusText }}</span>
       </div>
-      <button
-        class="trace-toggle"
-        :class="['trace-' + traceSummary.status.toLowerCase(), { active: isTracePanelOpen }]"
-        @click="toggleTracePanel"
-        title="查看命令执行步骤"
-      >
-        <span class="trace-dot"></span>
-        <span>{{ traceButtonLabel }}</span>
-      </button>
+      <div class="terminal-actions">
+        <button
+          class="trace-toggle"
+          :class="['trace-' + traceSummary.status.toLowerCase(), { active: isTracePanelOpen }]"
+          @click="toggleTracePanel"
+          title="查看命令执行步骤"
+        >
+          <span class="trace-dot"></span>
+          <span>{{ traceButtonLabel }}</span>
+        </button>
+        <button
+          v-if="isTempSession"
+          class="temp-end-btn"
+          @click="endTempSession"
+          title="结束并清空当前临时会话"
+        >
+          结束临时会话
+        </button>
+      </div>
     </div>
 
     <section v-if="isTracePanelOpen" class="trace-panel">
@@ -182,8 +197,11 @@ const handleScroll = async (e) => {
 
     <div class="scroll-container" ref="viewportRef" @scroll="handleScroll">
       
-      <div v-if="displayLimit >= globalMessages.length && globalMessages.length > 0" class="history-end">
+      <div v-if="!isTempSession && displayLimit >= globalMessages.length && globalMessages.length > 0" class="history-end">
         —— 已追溯至记忆链路的尽头 ——
+      </div>
+      <div v-if="isTempSession && tempMessages.length === 0" class="history-end">
+        —— 临时会话已开启，不读取本地记忆 ——
       </div>
       
       <div v-for="(m, i) in processedMessages" :key="'msg_'+i" :class="['bubble', m.role]">
@@ -200,8 +218,11 @@ const handleScroll = async (e) => {
 .terminal-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .terminal-name { color: #f0f0f0; font-size: 13px; font-weight: bold; }
 .terminal-state { color: #777; font-size: 11px; }
+.terminal-actions { display: flex; align-items: center; gap: 8px; }
 .trace-toggle { height: 28px; display: inline-flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid #33383c; border-radius: 6px; background: #111114; color: #aaa; font-family: 'Consolas'; font-size: 12px; cursor: pointer; transition: all 0.2s; }
 .trace-toggle:hover, .trace-toggle.active { color: #00ffcc; border-color: rgba(0, 255, 204, 0.55); background: rgba(0, 255, 204, 0.06); }
+.temp-end-btn { height: 28px; padding: 0 11px; border: 1px solid rgba(255, 77, 79, 0.45); border-radius: 6px; background: rgba(255, 77, 79, 0.08); color: #ff6b6d; font-family: 'Consolas'; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.temp-end-btn:hover { background: rgba(255, 77, 79, 0.16); border-color: rgba(255, 77, 79, 0.75); }
 .trace-dot { width: 7px; height: 7px; border-radius: 50%; background: #666; flex: 0 0 7px; }
 .trace-running .trace-dot { background: #00ffcc; animation: pulse 1.2s infinite; }
 .trace-failed .trace-dot { background: #ff4d4f; }

@@ -336,7 +336,39 @@ vault/plugins/{plugin_id}/knowledge/
 - 后端路由：`/api/plugins/{plugin_id}/...`
 - 前端事件：`vpm_ws_{plugin_id}`
 
-## 七、开发检查清单
+## 七、第三方插件安全模型
+
+Vault OS 对第三方插件采用默认拒绝策略。除主系统硬编码 allowlist 中的官方插件外，插件在 `manifest.json` 中声明 `security.trust = "first_party"` 不会被自动信任，运行时仍会被降级为 `third_party`。
+
+推荐在 `manifest.json` 中声明：
+
+```json
+{
+  "security": {
+    "trust": "third_party",
+    "permissions": ["network", "plugin_storage"],
+    "sensitive_reason": "说明为什么需要这些权限，展示给用户确认。"
+  }
+}
+```
+
+权限含义：
+- `network`：调用外部 HTTP 服务。
+- `native_backend`：使用 `/api/plugins/{plugin_id}/...` 后端路由，高风险；第三方插件默认不会被主进程 import。
+- `subprocess`：执行本地子进程，高风险。
+- `rag_write`：向主系统提交插件私有 RAG 切片。
+- `memory_read` / `profile_read`：读取 Boss 记忆或画像，高敏感。
+- `contact_info` / `location` / `host_info` / `api_key` / `system_config`：涉及电话、邮箱、地址、主机地址、API Key 或系统配置，高敏感。
+- `ui_commands`：请求主界面打开、切换或控制插件 UI。
+
+安全规则：
+- 第三方插件请求未声明权限时会被拒绝。
+- 第三方插件请求敏感权限时，主系统会弹窗展示插件、用途、字段预览和风险，由用户选择拒绝、允许一次或本次会话允许。
+- 插件输出会被视为不可信数据；不要在插件结果中放置“忽略系统指令”“泄露密钥”“调用其他工具”等 prompt injection 文本。
+- 第三方插件 UI 只会获得最小上下文：`plugin_id`、只读 `SystemConfig.API_BASE`、`showToast` 和 `pluginFetch`。不要依赖 `sysConfig`、全局聊天状态、run token 或全局 `sendWsCommand`。
+- 第三方插件 UI 调用后端时必须使用注入的 `pluginFetch("/api/plugins/{plugin_id}/...")`，直接 `fetch` 不会携带 scoped token。
+
+## 八、开发检查清单
 
 发布插件前，请至少检查：
 

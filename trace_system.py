@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 from typing import Any, Dict, Optional
+from plugin_security import redact_text
 
 
 TRACE_ROOT_TTL_SECONDS = 60
@@ -173,9 +174,7 @@ class TraceEmitter:
             conn.commit()
 
     def _mask_text(self, text: str) -> str:
-        masked = text
-        masked = re.sub(r"sk-[A-Za-z0-9_\-]{8,}", "******", masked)
-        masked = re.sub(r"Bearer\s+[A-Za-z0-9_\-\.]+", "Bearer ******", masked, flags=re.IGNORECASE)
+        masked = redact_text(text)
         if self.run_token:
             masked = masked.replace(self.run_token, "******")
         for path in (self.vault_root, os.path.expanduser("~")):

@@ -23,6 +23,15 @@ const displayMemory = computed(() => {
 });
 
 function formatExpireTime(isoString) { return new Date(isoString).toLocaleString(); }
+
+function displayTrait(mem) {
+  const trait = String(mem?.new_trait || mem?.context || '').trim();
+  const subject = String(mem?.target_entity || '').trim();
+  if (!trait || !subject) return trait;
+  if (trait.startsWith(subject)) return trait;
+  if (subject !== 'Boss') return `${subject}${trait}`;
+  return `Boss ${trait}`;
+}
 </script>
 
 <template>
@@ -55,7 +64,7 @@ function formatExpireTime(isoString) { return new Date(isoString).toLocaleString
             <div class="old-trait"><del>{{ mem.old_trait }}</del></div>
             <div class="arrow">↓ 强行覆写为 ↓</div>
           </div>
-          <div class="new-trait">{{ mem.new_trait }}</div>
+          <div class="new-trait">{{ displayTrait(mem) }}</div>
         </div>
         <div class="card-footer" v-if="mem.status === 'PENDING'">
           <div>⏳ 倒计时: <span class="countdown">{{ formatExpireTime(mem.expires_at) }}</span></div>
