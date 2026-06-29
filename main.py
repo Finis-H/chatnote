@@ -60,6 +60,9 @@ VAULT_ROOT = get_vault_root()
 print(f" [外脑物理锚点] 核心资产底座: {VAULT_ROOT}")
 
 PROFILE_IMPORT_MAX_CHARS = 9000
+MUSIC_PLAY_INTENT_PATTERN = re.compile(
+    r"(放歌|听歌|打碟|播放.*(歌|歌曲|音乐)|放.*(歌|歌曲|音乐)|来点.*(歌|歌曲|音乐)|听.*(歌|歌曲|音乐))"
+)
 
 #  运行时路径嗅探器 (Audit Hook)
 def path_sniffer(event, args):
@@ -86,6 +89,7 @@ try:
     from tool_executor import ToolExecutor
     from trace_system import copy_current_context, trace_emitter, traced_span
     from plugin_security import plugin_security_manager, redact_sensitive, redact_text
+    from memory_rules import classify_interaction_intent
 except ImportError as e:
     print(f" 引擎组件缺失: {e}")
     print("请确保所有组件脚本 (.py) 都在当前目录下！")
@@ -205,11 +209,129 @@ class VaultOS_Terminal:
         return default_config
 
     def save_config(self, new_config):
-        self.llm_config = new_config
+        candidate_config = copy.deepcopy(self.llm_config)
+        candidate_config.update(new_config or {})
+        health = self._health_check_config(candidate_config)
+        if not health.get("ok"):
+            print("  [系统核心] 新配置体检未通过，已保留当前运行配置。")
+            return {
+                "ok": False,
+                "message": health.get("message", "配置体检未通过，已保留当前运行配置。"),
+                "checks": health.get("checks", []),
+                "active_config": self.llm_config,
+            }
+        self.llm_config = candidate_config
         with open(self.config_path, 'w', encoding='utf-8') as f:
             json.dump(self.llm_config, f, ensure_ascii=False, indent=2)
-        print("  [系统核心] 大模型配置已更新，正在热重载引擎...")
+        print("  [系统核心] 大模型配置已通过体检，正在热重载引擎...")
         self._init_llm_client()
+        return {
+            "ok": True,
+            "message": "系统核心已热重载。",
+            "checks": health.get("checks", []),
+            "active_config": self.llm_config,
+        }
+
+    def _health_check_config(self, config):
+        checks = []
+
+        def add_check(name, ok, message, duration_ms=0):
+            checks.append({
+                "name": name,
+                "ok": bool(ok),
+                "message": message,
+                "duration_ms": int(duration_ms or 0),
+            })
+
+        def timed_call(name, func):
+            start = time.time()
+            try:
+                func()
+                add_check(name, True, "通过", (time.time() - start) * 1000)
+                return True
+            except Exception as e:
+                add_check(name, False, str(e), (time.time() - start) * 1000)
+                return False
+
+        def check_chat_response(client, model, timeout):
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "回复 OK"}],
+                timeout=timeout,
+            )
+            content = response.choices[0].message.content if response.choices else ""
+            if content is None:
+                raise ValueError("模型未返回有效内容。")
+
+        api_key = str(config.get("api_key", "") or "").strip()
+        base_url = str(config.get("base_url", "") or "").strip() or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        model_max = str(config.get("model_max", "") or "").strip()
+        model_mini = str(config.get("model_mini", "") or "").strip()
+        if not api_key:
+            add_check("model_max", False, "缺少 Chat API Key。")
+            add_check("jit_planner", False, "缺少 Chat API Key，无法验证 JIT。")
+            add_check("model_mini", False, "缺少 Chat API Key。")
+        else:
+            temp_client = OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
+            if model_max:
+                timed_call(
+                    "model_max",
+                    lambda: check_chat_response(temp_client, model_max, 8)
+                )
+
+                def check_jit():
+                    prompt = (
+                        "你是 JSON 规划器。用户说：放首歌曲听。"
+                        "可用工具：play_music_playlist。"
+                        "只输出 JSON：{\"plan_status\":\"READY\",\"steps\":[{\"tool_name\":\"play_music_playlist\"}]}"
+                    )
+                    response = temp_client.chat.completions.create(
+                        model=model_max,
+                        messages=[{"role": "system", "content": prompt}],
+                        timeout=10,
+                    )
+                    parsed = self._parse_json_robust(response.choices[0].message.content)
+                    if not isinstance(parsed, dict) or "plan_status" not in parsed:
+                        raise ValueError("JIT 样例未返回包含 plan_status 的合法 JSON。")
+
+                timed_call("jit_planner", check_jit)
+            else:
+                add_check("model_max", False, "缺少主算力模型名称。")
+                add_check("jit_planner", False, "缺少主算力模型名称，无法验证 JIT。")
+            if model_mini:
+                timed_call(
+                    "model_mini",
+                    lambda: check_chat_response(temp_client, model_mini, 8)
+                )
+            else:
+                add_check("model_mini", False, "缺少轻量模型名称。")
+
+        embed_key = str(config.get("embed_api_key", "") or "").strip()
+        if embed_key:
+            embed_base = str(config.get("embed_base_url", "") or "").strip() or base_url
+            embed_model = str(config.get("embed_model", "") or "").strip()
+            if embed_model:
+                embed_client = OpenAI(api_key=embed_key, base_url=embed_base, max_retries=0)
+                timed_call(
+                    "embedding",
+                    lambda: embed_client.embeddings.create(model=embed_model, input="Vault OS health check", timeout=8)
+                )
+            else:
+                add_check("embedding", False, "缺少向量模型名称。")
+        else:
+            add_check("embedding", True, "未配置 Embedding API Key，跳过向量体检。")
+
+        tools = self.registry.get_tools() if getattr(self, "registry", None) else []
+        music_manifest = os.path.join(VAULT_ROOT, "plugins", "music_agent", "manifest.json")
+        add_check("tool_registry", bool(tools), f"已注册 {len(tools)} 个工具。" if tools else "工具注册表为空。")
+        add_check("music_agent_manifest", os.path.exists(music_manifest), "music_agent manifest 可读。" if os.path.exists(music_manifest) else "缺少 music_agent manifest。")
+
+        ok = all(item.get("ok") for item in checks)
+        return {
+            "ok": ok,
+            "message": "配置体检通过。" if ok else "配置体检未通过，已保留当前运行配置。",
+            "checks": checks,
+        }
 
     def _init_llm_client(self):
         raw_key = self.llm_config.get("api_key", "")
@@ -291,9 +413,40 @@ class VaultOS_Terminal:
             with traced_span("L2_QUERY", "预读记忆画像上下文"):
                 prefetch_context = self._build_memory_prefetch_context(display_message)
 
-            with traced_span("JIT_PARSE", "编译动态执行蓝图"):
+            intent_type = classify_interaction_intent(display_message)
+            should_run_jit = intent_type not in {"DIRECT_CHAT", "LOCAL_PROFILE_CHAT"}
+            if should_run_jit:
+                jit_span = trace_emitter.start_span("JIT_PARSE", "编译动态执行蓝图", {"intent": intent_type})
                 blueprint = self._compile_jit_task(display_message, prefetch_context=prefetch_context)
+                if blueprint.get("jit_error"):
+                    jit_span.finish("DEGRADED", "JIT 编译失败，已降级处理", {"error": blueprint.get("jit_error")})
+                else:
+                    jit_span.finish("SUCCESS", "编译动态执行蓝图完成")
+            else:
+                trace_emitter.emit_event(
+                    "JIT_GATE",
+                    "SUCCESS",
+                    "保守门控跳过 JIT",
+                    details={"intent": intent_type},
+                )
+                blueprint = {
+                    "plan_status": "DIRECT_CHAT",
+                    "reasoning": f"保守门控识别为 {intent_type}，直接进入回答生成。",
+                }
             status = blueprint.get("plan_status", "DIRECT_CHAT")
+            if status == "DIRECT_CHAT" and (blueprint.get("jit_error") or intent_type == "TOOL_TASK"):
+                fallback_blueprint = self._compile_local_tool_fallback(display_message)
+                if fallback_blueprint:
+                    if not blueprint.get("jit_error"):
+                        trace_emitter.emit_event(
+                            "LOCAL_TOOL_FALLBACK",
+                            "DEGRADED",
+                            "JIT 未规划明确单工具任务，已启用本地兜底",
+                            details={"intent": intent_type, "tool": fallback_blueprint.get("steps", [{}])[0].get("tool_name")},
+                        )
+                    print(f" [本地兜底] 命中工具蓝图: {fallback_blueprint.get('reasoning')}")
+                    blueprint = fallback_blueprint
+                    status = blueprint.get("plan_status", "DIRECT_CHAT")
             print(f" [编译决断]: {status} | 理由: {blueprint.get('reasoning')}")
             
             retrieved_context = prefetch_context
@@ -586,6 +739,30 @@ class VaultOS_Terminal:
             print(f" [底层JSON脱壳异常]: {e}")
             return None
 
+    def _compile_local_tool_fallback(self, user_input: str) -> dict | None:
+        text = str(user_input or "").strip()
+        if not MUSIC_PLAY_INTENT_PATTERN.search(text):
+            return None
+        tools = self.registry.get_tools() if self.registry else []
+        has_music_tool = any(t.get("function", {}).get("name") == "play_music_playlist" for t in tools)
+        if not has_music_tool:
+            return None
+        return {
+            "plan_status": "READY",
+            "missing_capabilities": [],
+            "suggestion_msg": "",
+            "blackboard_keys": ["music_result"],
+            "steps": [
+                {
+                    "step_id": "s1",
+                    "tool_name": "play_music_playlist",
+                    "args": {"keywords": ""},
+                    "output_to_blackboard": "music_result",
+                }
+            ],
+            "reasoning": "JIT 编译器超时，本地兜底识别到明确音乐播放意图。",
+        }
+
     def _compile_jit_task(self, user_input: str, prefetch_context: str = "") -> dict:
         print(" [JIT 编译器] 正在为复杂任务绘制动态执行蓝图...")
         # 让 CEO (JIT编译器) 也拥有时间观念
@@ -673,10 +850,10 @@ class VaultOS_Terminal:
             parsed = self._parse_json_robust(content)
             if parsed and "plan_status" in parsed:
                 return parsed
-            return {"plan_status": "DIRECT_CHAT"}
+            return {"plan_status": "DIRECT_CHAT", "jit_error": "JIT 编译器未返回合法 plan_status。"}
         except Exception as e:
             print(f" [JIT 编译器] 脑区故障，降级为直连: {e}")
-            return {"plan_status": "DIRECT_CHAT"}
+            return {"plan_status": "DIRECT_CHAT", "jit_error": str(e)}
 
     def _extract_memory_buffer_events(self, buffer_records):
         prompt = """
@@ -1105,7 +1282,14 @@ class TempVaultSession(VaultOS_Terminal):
             if display_message.lower() in {"/audit", "/memory_sync"}:
                 return " [临时会话] 当前处于无记忆沙盒，记忆同步与画像审计不可用。"
 
-            blueprint = self._compile_jit_task(display_message, prefetch_context="")
+            intent_type = classify_interaction_intent(display_message)
+            if intent_type in {"DIRECT_CHAT", "LOCAL_PROFILE_CHAT"}:
+                blueprint = {
+                    "plan_status": "DIRECT_CHAT",
+                    "reasoning": f"临时会话保守门控识别为 {intent_type}，直接进入回答生成。",
+                }
+            else:
+                blueprint = self._compile_jit_task(display_message, prefetch_context="")
             status = blueprint.get("plan_status", "DIRECT_CHAT")
 
             retrieved_context = ""

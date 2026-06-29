@@ -281,8 +281,8 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 await websocket.send_json({"type": "config_data", "content": vault_os.llm_config})
                 
             elif cmd_type == "save_config":
-                vault_os.save_config(request.get("content")) 
-                await websocket.send_json({"type": "system_toast", "content": " 系统核心已热重载！"})
+                result = await asyncio.to_thread(vault_os.save_config, request.get("content"))
+                await websocket.send_json({"type": "config_save_result", "content": result})
                 
             elif cmd_type == "fetch_memory":
                 try:

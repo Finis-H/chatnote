@@ -96,17 +96,23 @@ export const traceSummary = computed(() => {
   const events = traceEvents.value || [];
   const runningCount = events.filter(event => event.status === 'RUNNING').length;
   const failedCount = events.filter(event => ['FAILED', 'TIMEOUT'].includes(event.status)).length;
+  const degradedCount = events.filter(event => event.status === 'DEGRADED').length;
   const abortedCount = events.filter(event => event.status === 'ABORTED').length;
+  const hasSuccessfulResponse = events.some(event => event.step_code === 'RESPONSE_DONE' && event.status === 'SUCCESS');
+  const hasRecoveredDegradation = hasSuccessfulResponse && degradedCount > 0 && failedCount === 0 && runningCount === 0;
   let status = 'IDLE';
   if (failedCount > 0) status = 'FAILED';
   else if (runningCount > 0) status = 'RUNNING';
+  else if (degradedCount > 0 && !hasRecoveredDegradation) status = 'DEGRADED';
   else if (events.length > 0) status = 'SUCCESS';
   return {
     status,
     totalCount: events.length,
     runningCount,
     failedCount,
-    abortedCount
+    degradedCount,
+    abortedCount,
+    hasRecoveredDegradation
   };
 });
 
@@ -119,7 +125,7 @@ let isAppDestroyed = false;
 let toastTimeout = null;
 let shakeTimeout = null;
 let traceWatchdogTimer = null;
-const TRACE_TERMINAL_STATUSES = ['SUCCESS', 'FAILED', 'TIMEOUT', 'ABORTED', 'BLOCKED'];
+const TRACE_TERMINAL_STATUSES = ['SUCCESS', 'DEGRADED', 'FAILED', 'TIMEOUT', 'ABORTED', 'BLOCKED'];
 const TRACE_QUEUE_LIMIT = 50;
 
 export function resolveMemoryConflict(id, decision) {
@@ -234,12 +240,12 @@ export function useNeuroLink() {
 
     (snapshot.events || []).forEach(event => upsertTraceEvent(event));
 
-    if (runStatus === 'SUCCESS') {
+    if (runStatus === 'SUCCESS' || runStatus === 'DEGRADED') {
       const parentIdsToCollapse = new Set();
       store.value = store.value.map(event => {
         if (event.status === 'RUNNING') {
           if (event.parent_span_id) parentIdsToCollapse.add(event.parent_span_id);
-          return { ...event, status: 'SUCCESS', muted: false };
+          return { ...event, status: runStatus, muted: false };
         }
         return event;
       });
@@ -422,6 +428,14 @@ export function useNeuroLink() {
         else if (data.type === 'SYSTEM_STATE_CHANGED') {
           sendWsCommand({ type: "fetch_memory" });
         }
+        else if (data.type === 'config_save_result') {
+          const result = data.content || {};
+          if (result.active_config) sysConfig.value = result.active_config;
+          const failedChecks = (result.checks || []).filter(item => !item.ok).map(item => item.name).join(', ');
+          const failedSuffix = failedChecks ? ` 失败项: ${failedChecks}` : '';
+          showToast(result.ok ? `✅ ${result.message || '系统核心已热重载！'}` : `⚠️ ${result.message || '配置体检未通过，已保留当前配置。'}${failedSuffix}`);
+          if (result.ok) switchView('chat');
+        }
         else if (data.type === 'system_toast') showToast("🩺 [管家汇报] " + data.content);
         else if (data.type === 'profile_import_state') {
           applyProfileImportState(data.content || {});
@@ -594,8 +608,7 @@ export function useNeuroLink() {
 
   function saveSystemConfig() {
     sendWsCommand({ type: "save_config", content: sysConfig.value });
-    showToast("✅ 核心引擎配置已热重载！");
-    switchView('chat');
+    showToast("🩺 正在进行配置体检...");
   }
 
   function confirmImport() {

@@ -15,7 +15,7 @@ TRACE_ROOT_TTL_SECONDS = 60
 TRACE_SPAN_TTL_SECONDS = 60
 TRACE_DETAILS_LIMIT = 4000
 
-TERMINAL_STATUSES = {"SUCCESS", "FAILED", "TIMEOUT", "ABORTED", "BLOCKED"}
+TERMINAL_STATUSES = {"SUCCESS", "DEGRADED", "FAILED", "TIMEOUT", "ABORTED", "BLOCKED"}
 
 current_trace_id = contextvars.ContextVar("vault_trace_id", default=None)
 current_thread_id = contextvars.ContextVar("vault_thread_id", default=None)
@@ -246,6 +246,7 @@ class TraceEmitter:
                 "response_done": False,
                 "response_status": "SUCCESS",
                 "response_error": "",
+                "has_degraded": False,
             }
         tokens = bind_trace_context(trace_id, thread_id, root_span_id)
         self.emit_event(
@@ -321,7 +322,10 @@ class TraceEmitter:
     def _final_status_for_trace(self, trace_id: str) -> str:
         with self._active_lock:
             run = self._active_runs.get(trace_id) or {}
-            return run.get("response_status") or "SUCCESS"
+            response_status = run.get("response_status") or "SUCCESS"
+            if response_status == "SUCCESS" and run.get("has_degraded"):
+                return "DEGRADED"
+            return response_status
 
     def _final_error_for_trace(self, trace_id: str) -> str:
         with self._active_lock:
@@ -402,6 +406,8 @@ class TraceEmitter:
         }
         with self._active_lock:
             key = (trace_id, span_id)
+            if status == "DEGRADED" and run:
+                run["has_degraded"] = True
             if status == "RUNNING":
                 self._active_spans[key] = {
                     "thread_id": thread_id,

@@ -66,12 +66,14 @@ const visibleTraceEvents = computed(() => {
 const traceButtonLabel = computed(() => {
   if (traceSummary.value.runningCount > 0) return `观测 ${traceSummary.value.runningCount}`;
   if (traceSummary.value.failedCount > 0) return `观测 ${traceSummary.value.failedCount}`;
+  if (traceSummary.value.status === 'DEGRADED') return `观测 ${traceSummary.value.degradedCount}`;
   return traceSummary.value.totalCount > 0 ? `观测 ${traceSummary.value.totalCount}` : '观测';
 });
 const terminalStatusText = computed(() => {
   if (!activeTraceId.value) return '等待指令';
   if (traceSummary.value.status === 'RUNNING') return '执行中';
   if (traceSummary.value.status === 'FAILED') return '需要查看';
+  if (traceSummary.value.status === 'DEGRADED') return '含降级';
   return '已就绪';
 });
 function traceLevel(event) {
@@ -87,6 +89,7 @@ function statusText(status) {
   const labels = {
     RUNNING: '运行中',
     SUCCESS: '完成',
+    DEGRADED: '降级完成',
     FAILED: '失败',
     TIMEOUT: '超时',
     ABORTED: '已中断',
@@ -227,6 +230,7 @@ const handleScroll = async (e) => {
 .trace-running .trace-dot { background: #00ffcc; animation: pulse 1.2s infinite; }
 .trace-failed .trace-dot { background: #ff4d4f; }
 .trace-success .trace-dot { background: #55d17a; }
+.trace-degraded .trace-dot { background: #f0b84a; }
 .trace-panel { flex: 0 0 auto; max-height: 34vh; display: flex; flex-direction: column; border-bottom: 1px solid #222; background: #08080a; box-shadow: 0 12px 30px rgba(0,0,0,0.2); }
 .trace-panel-head { height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; color: #b8b8b8; font-size: 12px; border-bottom: 1px solid #1b1b1f; }
 .trace-id { color: #555; font-size: 10px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -240,6 +244,7 @@ const handleScroll = async (e) => {
 .trace-status-mark { width: 8px; height: 8px; border-radius: 50%; background: #666; }
 .status-running .trace-status-mark { background: #00ffcc; animation: pulse 1.2s infinite; }
 .status-success .trace-status-mark { background: #55d17a; }
+.status-degraded .trace-status-mark { background: #f0b84a; }
 .status-failed .trace-status-mark, .status-timeout .trace-status-mark { background: #ff4d4f; }
 .status-aborted .trace-status-mark, .trace-row.muted .trace-status-mark { background: #555; }
 .trace-code { color: #d7d7d7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -247,6 +252,7 @@ const handleScroll = async (e) => {
 .trace-meta { display: inline-flex; align-items: center; gap: 8px; color: #666; white-space: nowrap; }
 .trace-fold { color: #00ffcc; font-weight: bold; }
 .status-failed .trace-message, .status-timeout .trace-message { color: #ff8f91; }
+.status-degraded .trace-message { color: #ffd27a; }
 .trace-row.muted { color: #666; }
 .trace-row.muted .trace-message, .trace-row.muted .trace-code { color: #666; }
 .scroll-container { padding: 30px; display: flex; flex-direction: column; gap: 20px; flex: 1; min-height: 0; overflow-y: auto; scroll-behavior: smooth; }
