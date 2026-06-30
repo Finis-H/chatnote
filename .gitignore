@@ -57,6 +57,8 @@ discard/
 chroma_db/
 faiss_index/
 .codex/
+.agents/
+AGENTS.md
 
 # 临时生成的文档或媒体文件
 *.md.tmp
@@ -91,6 +93,7 @@ Desktop.ini
 vault/*.db
 vault/*.sqlite3
 vault/chroma/
+vault/knowledge/vector_store/
 
 # 2. 忽略动态生成的记忆和日志
 vault/*.jsonl
@@ -100,7 +103,9 @@ vault/core_profile.json
 vault/habits.json
 vault/pending_memory.json
 vault/.run_token
+vault/.server_port
 vault/.server_token
+vault/plugin_permissions.json
 vault/shadow/
 vault/test_sandbox/
 tests/
@@ -117,6 +122,7 @@ vault/knowledge/entities/*
 # 4. 忽略插件运行时产生的媒体与记忆资产 (仅保留源码和 UI)
 vault/plugins/*/audio/*
 vault/plugins/*/covers/*
+vault/plugins/*/assets/*
 vault/plugins/*/knowledge/*
 !vault/plugins/*/api.py
 !vault/plugins/*/manifest.json
