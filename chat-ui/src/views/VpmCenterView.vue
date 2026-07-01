@@ -53,27 +53,27 @@ const confirmUninstall = (pluginId, pluginName) => {
 </script>
 
 <style scoped>
-.vpm-center { padding: 30px; height: 100%; overflow-y: auto; color: #fff;}
-.header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid #333; padding-bottom: 15px;}
-.cyber-title { font-size: 24px; margin: 0; color: #00ffcc; display: flex; align-items: baseline; gap: 10px;}
-.cyber-title span { font-size: 12px; color: #666; letter-spacing: 2px;}
-.btn-scan { background: transparent; border: 1px solid #00ffcc; color: #00ffcc; padding: 5px 15px; border-radius: 4px; cursor: pointer; transition: all 0.2s;}
-.btn-scan:hover { background: rgba(0,255,204,0.1); box-shadow: 0 0 10px rgba(0,255,204,0.3);}
+.vpm-center { padding: var(--space-3xl); height: 100%; overflow-y: auto; color: var(--text-primary);}
+.header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3xl); border-bottom: 1px solid var(--border-strong); padding-bottom: var(--space-lg);}
+.cyber-title { font-size: 24px; margin: 0; color: var(--accent); display: flex; align-items: baseline; gap: var(--space-sm);}
+.cyber-title span { font-size: 12px; color: var(--text-disabled); letter-spacing: 2px;}
+.btn-scan { background: transparent; border: 1px solid var(--accent-border); color: var(--accent); padding: var(--space-xs) var(--space-lg); border-radius: var(--radius-xs); cursor: pointer; transition: background var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard);}
+.btn-scan:hover { background: var(--accent-soft); box-shadow: var(--shadow-glow-soft);}
 
-.plugin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-.plugin-card { background: rgba(20,20,22,0.8); border: 1px solid #333; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; transition: transform 0.2s, border-color 0.2s;}
-.plugin-card:hover { border-color: #00ffcc; transform: translateY(-3px);}
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;}
-.p-name { margin: 0; font-size: 18px; color: #fff;}
-.p-version { font-size: 12px; background: #222; padding: 2px 6px; border-radius: 4px; color: #888;}
-.p-desc { font-size: 13px; color: #aaa; line-height: 1.5; margin-bottom: 20px; flex: 1;}
-.card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #333; padding-top: 15px;}
-.p-author { font-size: 11px; color: #666; font-family: 'Consolas';}
-.p-actions button { background: none; border: none; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; font-size: 16px;}
+.plugin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-xl); }
+.plugin-card { background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: var(--space-xl); display: flex; flex-direction: column; transition: transform var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard);}
+.plugin-card:hover { border-color: var(--accent-border); background: var(--bg-panel-raised); transform: translateY(-3px); box-shadow: var(--shadow-panel);}
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-lg);}
+.p-name { margin: 0; font-size: 18px; color: var(--text-primary);}
+.p-version { font-size: 12px; background: var(--bg-panel-raised); padding: 2px 6px; border-radius: var(--radius-xs); color: var(--text-muted);}
+.p-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: var(--space-xl); flex: 1;}
+.card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-strong); padding-top: var(--space-lg);}
+.p-author { font-size: 11px; color: var(--text-disabled); font-family: var(--font-mono);}
+.p-actions button { background: none; border: none; cursor: pointer; opacity: 0.68; transition: opacity var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard); font-size: 16px;}
 .p-actions button:hover { opacity: 1; }
-.btn-uninstall:hover { color: #ff4d4f !important; }
+.btn-uninstall:hover { color: var(--danger) !important; }
 
-.empty-state { text-align: center; margin-top: 100px; color: #555; font-family: 'Consolas'; position: relative;}
+.empty-state { text-align: center; margin-top: 100px; color: var(--text-disabled); font-family: var(--font-mono); position: relative;}
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

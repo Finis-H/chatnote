@@ -29,19 +29,19 @@ watch([noteThreads, isThinking], () => nextTick(scrollViewport), { deep: true })
 </template>
 
 <style scoped>
-.scroll-container { padding: 30px; display: flex; flex-direction: column; height: 100%; overflow-y: auto; }
+.scroll-container { padding: var(--space-3xl); display: flex; flex-direction: column; height: 100%; overflow-y: auto; }
 .scroll-container::-webkit-scrollbar { width: 6px; }
-.scroll-container::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.note-body { border-bottom: 1px solid #222; padding-bottom: 40px; margin-bottom: 20px; }
-.note-body h1 { color: #fff; margin-bottom: 20px; font-size: 22px; }
-.back-link { background: transparent; border: 1px solid #444; color: #888; padding: 5px 12px; border-radius: 4px; cursor: pointer; margin-bottom: 20px; font-family: 'Consolas'; }
-.back-link:hover { color: #fff; border-color: #fff; }
-.thread-separator { text-align: center; color: #444; font-size: 11px; letter-spacing: 3px; margin: 30px 0; }
-.thread-chat { display: flex; flex-direction: column; gap: 20px; }
-.bubble { padding: 12px 16px; border-radius: 6px; font-size: 14px; max-width: 85%; line-height: 1.6; }
-.user { background: #1a1a1c; align-self: flex-end; border-right: 2px solid #555; color: #eee; }
-.ai, .assistant { background: rgba(0,255,204,0.03); align-self: flex-start; border-left: 2px solid #00ffcc; color: #ccc; }
+.scroll-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-xs); }
+.note-body { border-bottom: 1px solid var(--border-subtle); padding-bottom: var(--space-4xl); margin-bottom: var(--space-xl); }
+.note-body h1 { color: var(--text-primary); margin-bottom: var(--space-xl); font-size: 22px; }
+.back-link { background: transparent; border: 1px solid var(--border-strong); color: var(--text-muted); padding: var(--space-xs) var(--space-md); border-radius: var(--radius-xs); cursor: pointer; margin-bottom: var(--space-xl); font-family: var(--font-mono); }
+.back-link:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+.thread-separator { text-align: center; color: var(--text-disabled); font-size: 11px; letter-spacing: 3px; margin: var(--space-3xl) 0; }
+.thread-chat { display: flex; flex-direction: column; gap: var(--space-xl); }
+.bubble { padding: var(--space-md) 16px; border-radius: var(--radius-sm); font-size: 14px; max-width: 85%; line-height: 1.6; }
+.user { background: var(--bg-panel-raised); align-self: flex-end; border-right: 2px solid var(--border-strong); color: var(--text-primary); }
+.ai, .assistant { background: var(--accent-soft); align-self: flex-start; border-left: 2px solid var(--accent-border); color: var(--text-secondary); }
 .role-tag { font-size: 10px; opacity: 0.4; display: block; margin-bottom: 5px; }
-.thinking-cursor { color: #00ffcc; font-size: 12px; animation: pulse 1.5s infinite; padding: 10px; }
+.thinking-cursor { color: var(--accent); font-size: 12px; animation: pulse 1.5s infinite; padding: var(--space-sm); }
 @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 </style>

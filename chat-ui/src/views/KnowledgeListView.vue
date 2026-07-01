@@ -54,25 +54,25 @@ function requestDelete(event, note) {
 </template>
 
 <style scoped>
-.scroll-container { padding: 30px; display: flex; flex-direction: column; gap: 20px; height: 100%; overflow-y: auto; }
+.scroll-container { padding: var(--space-3xl); display: flex; flex-direction: column; gap: var(--space-xl); height: 100%; overflow-y: auto; }
 .scroll-container::-webkit-scrollbar { width: 6px; }
-.scroll-container::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.view-title { color: #fff; font-size: 18px; font-weight: normal; margin-bottom: 10px; }
-.search-console { display: flex; gap: 15px; margin-bottom: 25px; align-items: center; }
-.filter-capsules { display: flex; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 3px; }
-.filter-capsules button { background: transparent; border: none; color: #888; padding: 6px 16px; border-radius: 18px; cursor: pointer; font-size: 12px; transition: all 0.2s; font-family: 'Consolas'; }
-.filter-capsules button.active { background: #00ffcc; color: #000; font-weight: bold; }
-.search-input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid #333; color: #fff; padding: 10px 15px; border-radius: 6px; font-size: 14px; outline: none; }
-.search-input:focus { border-color: #00ffcc; box-shadow: 0 0 10px rgba(0,255,204,0.1); }
-.news-card { background: rgba(255, 255, 255, 0.02); border: 1px solid #222; border-radius: 10px; padding: 20px; cursor: pointer; transition: all 0.2s; }
-.news-card:hover { transform: translateY(-2px); border-color: #00ffcc; background: rgba(0, 255, 204, 0.02); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
-.news-card:hover .card-title { color: #00ffcc; }
-.card-header { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #555; margin-bottom: 12px; }
-.card-title { font-size: 16px; color: rgba(0, 255, 204, 0.736); margin-bottom: 8px; }
-.card-summary { font-size: 13px; color: #888; line-height: 1.6; }
-.card-tags { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-.tag { background: rgba(0, 255, 204, 0.1); border: 1px solid rgba(0,255,204,0.3); color: #00ffcc; font-size: 10px; padding: 2px 8px; border-radius: 4px; }
-.delete-btn { background: transparent; border: none; color: #555; cursor: pointer; padding: 4px 8px; font-size: 14px; z-index: 10; transition: all 0.2s;}
-.delete-btn:hover { color: #ff4d4f; transform: scale(1.1); }
-.card-footer { margin-top: 15px; font-size: 11px; color: #555; }
+.scroll-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-xs); }
+.view-title { color: var(--text-primary); font-size: 18px; font-weight: normal; margin-bottom: var(--space-sm); }
+.search-console { display: flex; gap: var(--space-lg); margin-bottom: var(--space-2xl); align-items: center; }
+.filter-capsules { display: flex; background: var(--bg-hover); border-radius: var(--radius-pill); padding: var(--space-2xs); }
+.filter-capsules button { background: transparent; border: none; color: var(--text-muted); padding: 6px 16px; border-radius: var(--radius-pill); cursor: pointer; font-size: 12px; transition: background var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard); font-family: var(--font-mono); }
+.filter-capsules button.active { background: var(--accent); color: var(--text-inverse); font-weight: bold; }
+.search-input { flex: 1; background: var(--bg-console); border: 1px solid var(--border-strong); color: var(--text-primary); padding: 10px var(--space-lg); border-radius: var(--radius-sm); font-size: 14px; }
+.search-input:focus { border-color: var(--accent-border); box-shadow: var(--shadow-glow-soft); }
+.news-card { background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-xl); cursor: pointer; transition: transform var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard); }
+.news-card:hover { transform: translateY(-2px); border-color: var(--accent-border); background: var(--bg-panel-raised); box-shadow: var(--shadow-panel); }
+.news-card:hover .card-title { color: var(--accent-strong); }
+.card-header { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-disabled); margin-bottom: var(--space-md); }
+.card-title { font-size: 16px; color: var(--accent); margin-bottom: var(--space-sm); }
+.card-summary { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+.card-tags { display: flex; gap: var(--space-sm); margin-top: var(--space-md); flex-wrap: wrap; }
+.tag { background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); font-size: 10px; padding: 2px var(--space-sm); border-radius: var(--radius-xs); }
+.delete-btn { background: transparent; border: none; color: var(--text-disabled); cursor: pointer; padding: var(--space-xs) var(--space-sm); font-size: 14px; z-index: 10; transition: color var(--duration-base) var(--ease-standard), transform var(--duration-base) var(--ease-standard);}
+.delete-btn:hover { color: var(--danger); transform: scale(1.1); }
+.card-footer { margin-top: var(--space-lg); font-size: 11px; color: var(--text-disabled); }
 </style>
