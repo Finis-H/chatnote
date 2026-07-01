@@ -1,60 +1,252 @@
-/* 🚨 绝对暴力重置：消灭一切原生边距和外层滚动条 */
+:root {
+  --font-ui: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
+
+  --bg-app: #090a0d;
+  --bg-shell: #0c0d11;
+  --bg-panel: #111318;
+  --bg-panel-raised: #171a20;
+  --bg-console: #06070a;
+  --bg-overlay: rgba(3, 5, 8, 0.74);
+  --bg-hover: rgba(255, 255, 255, 0.045);
+  --bg-hover-strong: rgba(255, 255, 255, 0.08);
+  --bg-field-muted: rgba(255, 255, 255, 0.025);
+  --bg-selected: rgba(44, 224, 196, 0.075);
+  --bg-danger-soft: rgba(255, 93, 106, 0.085);
+  --bg-danger-hover: rgba(255, 101, 115, 0.15);
+  --bg-warning-soft: rgba(243, 185, 73, 0.1);
+  --bg-success-soft: rgba(111, 211, 139, 0.085);
+
+  --text-primary: #f0f3f5;
+  --text-secondary: #c4ccd2;
+  --text-muted: #87919b;
+  --text-disabled: #58616b;
+  --text-inverse: #07100f;
+
+  --accent: #45e0c8;
+  --accent-strong: #7cf4df;
+  --accent-soft: rgba(69, 224, 200, 0.1);
+  --accent-border: rgba(69, 224, 200, 0.44);
+  --table-stripe: rgba(255, 255, 255, 0.025);
+  --code-inline-bg: rgba(255, 255, 255, 0.08);
+  --danger: #ff6573;
+  --danger-strong: #ff8892;
+  --danger-border: rgba(255, 101, 115, 0.45);
+  --warning: #f2bd5c;
+  --warning-strong: #ffd585;
+  --success: #79d68f;
+  --info: #7aa7ff;
+
+  --border-subtle: #242832;
+  --border-strong: #39404a;
+  --border-muted: #1a1d24;
+  --border-dashed: #4b535f;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --space-2xs: 3px;
+  --space-xs: 5px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 15px;
+  --space-xl: 20px;
+  --space-2xl: 25px;
+  --space-3xl: 30px;
+  --space-4xl: 40px;
+
+  --shadow-panel: 0 12px 28px rgba(0, 0, 0, 0.28);
+  --shadow-popover: 0 20px 50px rgba(0, 0, 0, 0.68);
+  --shadow-glow-soft: 0 0 14px rgba(69, 224, 200, 0.16);
+  --shadow-danger-soft: 0 0 14px rgba(255, 101, 115, 0.24);
+
+  --focus-ring: 0 0 0 2px rgba(69, 224, 200, 0.92), 0 0 0 5px rgba(69, 224, 200, 0.16);
+  --focus-ring-offset: 2px;
+  --duration-fast: 0.16s;
+  --duration-base: 0.22s;
+  --duration-slow: 0.36s;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 html, body, #app {
   margin: 0 !important;
   padding: 0 !important;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #0a0a0c;
+  background: var(--bg-app);
 }
-* { box-sizing: border-box; }
-*:focus { outline: none; }
 
-/* Markdown 引擎专属全局样式 (Obsidian / Cyberpunk 风格) */
+* {
+  box-sizing: border-box;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: var(--focus-ring);
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: var(--focus-ring);
+}
+
+::selection {
+  color: var(--text-inverse);
+  background: var(--accent-strong);
+}
+
 .markdown-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.6;
-  color: #d1d1d1;
+  color: var(--text-secondary);
   word-wrap: break-word;
 }
-.markdown-body h1, .markdown-body h2, .markdown-body h3, 
-.markdown-body h4, .markdown-body h5, .markdown-body h6 {
-  margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; color: #00ffccc5;
-}
-.markdown-body h1 { font-size: 1.8em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
-.markdown-body h2 { font-size: 1.5em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
-.markdown-body h3 { font-size: 1.25em; }
-.markdown-body a { color: rgba(0, 255, 204, 0.6); text-decoration: none; transition: color 0.2s; }
-.markdown-body a:hover { color: #00ffcc; text-decoration: underline; }
-.markdown-body strong { color: #d1d1d1; font-weight: bold; }
-.markdown-body blockquote {
-  padding: 10px 15px; color: #888; background: rgba(0, 255, 204, 0.05);
-  border-left: 4px solid #00ffccbd; margin: 15px 0; border-radius: 0 6px 6px 0;
-}
-.markdown-body blockquote p { margin: 0; }
-.markdown-body ul, .markdown-body ol { padding-left: 2em; margin-top: 0; margin-bottom: 16px; }
-.markdown-body li { margin-bottom: 0.25em; }
-.markdown-body table {
-  display: block; width: 100%; width: max-content; max-width: 100%;
-  overflow: auto; margin-bottom: 16px; border-spacing: 0; border-collapse: collapse;
-}
-.markdown-body table th, .markdown-body table td { padding: 6px 13px; border: 1px solid #333; }
-.markdown-body table th { background: rgba(255, 255, 255, 0.05); font-weight: bold; }
-.markdown-body table tr:nth-child(2n) { background: rgba(255, 255, 255, 0.02); }
 
-/* ==== 代码块极致优化 ==== */
-.markdown-body p code, .markdown-body li code {
-  background-color: rgba(255, 255, 255, 0.1); color: #ffb86c;
-  padding: 0.2em 0.4em; margin: 0; font-size: 85%; border-radius: 4px; font-family: 'Consolas', monospace;
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--accent-strong);
 }
+
+.markdown-body h1 {
+  font-size: 1.8em;
+  border-bottom: 1px solid var(--border-strong);
+  padding-bottom: 0.3em;
+}
+
+.markdown-body h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--border-strong);
+  padding-bottom: 0.3em;
+}
+
+.markdown-body h3 {
+  font-size: 1.25em;
+}
+
+.markdown-body a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.markdown-body a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.markdown-body strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.markdown-body blockquote {
+  padding: 10px 15px;
+  color: var(--text-muted);
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent-border);
+  margin: 15px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.markdown-body blockquote p {
+  margin: 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 2em;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.markdown-body li {
+  margin-bottom: 0.25em;
+}
+
+.markdown-body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+  margin-bottom: 16px;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.markdown-body table th,
+.markdown-body table td {
+  padding: 6px 13px;
+  border: 1px solid var(--border-strong);
+}
+
+.markdown-body table th {
+  background: var(--bg-hover);
+  font-weight: 700;
+}
+
+.markdown-body table tr:nth-child(2n) {
+  background: var(--table-stripe);
+}
+
+.markdown-body p code,
+.markdown-body li code {
+  background-color: var(--code-inline-bg);
+  color: var(--warning-strong);
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+}
+
 .markdown-body pre {
-  background-color: #0d0d0f; border: 1px solid #222; border-radius: 6px;
-  padding: 16px; overflow: auto; font-size: 85%; line-height: 1.45; margin-bottom: 16px;
+  background-color: var(--bg-console);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  margin-bottom: 16px;
 }
+
 .markdown-body pre code {
-  display: inline; max-width: 100%; padding: 0; margin: 0;
-  overflow: visible; line-height: inherit; word-wrap: normal;
-  background-color: transparent; border: 0; color: inherit;
+  display: inline;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  line-height: inherit;
+  word-wrap: normal;
+  background-color: transparent;
+  border: 0;
+  color: inherit;
 }
-.markdown-body p:last-child { margin-bottom: 0; }
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}

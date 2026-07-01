@@ -60,6 +60,7 @@ faiss_index/
 .agents/
 AGENTS.md
 agents.md
+docs/
 
 # 临时生成的文档或媒体文件
 *.md.tmp

@@ -70,26 +70,26 @@ function handleFileChange(e) {
 </template>
 
 <style scoped>
-.scroll-container { padding: 30px; display: flex; flex-direction: column; gap: 20px; height: 100%; overflow-y: auto; }
+.scroll-container { padding: var(--space-3xl); display: flex; flex-direction: column; gap: var(--space-xl); height: 100%; overflow-y: auto; }
 .scroll-container::-webkit-scrollbar { width: 6px; }
-.scroll-container::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.view-title { color: #fff; font-size: 18px; font-weight: normal; margin-bottom: 10px; }
-.settings-panel { background: rgba(255, 255, 255, 0.02); border: 1px solid #222; border-radius: 10px; padding: 30px; }
-.memory-subtitle { color: #888; font-size: 13px; margin-top: 5px; }
-.limit-tip { color: #666; font-size: 12px; font-family: 'Consolas'; }
-.upload-label { display: block; width: 100%; padding: 40px; border: 2px dashed #333; border-radius: 8px; text-align: center; color: #888; cursor: pointer; transition: all 0.2s; margin: 20px 0; }
-.upload-label:hover { border-color: #00ffcc; color: #00ffcc; background: rgba(0,255,204,0.02); }
-.save-btn { background: rgba(0, 255, 204, 0.1); border: 1px solid #00ffcc; color: #00ffcc; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-family: 'Consolas'; font-size: 15px; font-weight: bold; transition: all 0.2s; width: 100%; margin-top: 10px; }
-.save-btn:hover:not(:disabled) { background: #00ffcc; color: #000; box-shadow: 0 0 20px rgba(0,255,204,0.4); }
-.save-btn:disabled { border-color: #444; color: #666; cursor: not-allowed; background: transparent; }
-.panel-title { color: #fff; font-size: 15px; margin: 20px 0 10px; }
-.preview-panel, .locked-panel { margin-top: 20px; }
-.import-stats { display: flex; gap: 15px; color: #777; font-size: 12px; margin-bottom: 10px; }
-.preview-text { width: 100%; min-height: 360px; resize: vertical; box-sizing: border-box; background: rgba(0,0,0,0.45); border: 1px solid #333; border-radius: 8px; color: #ddd; padding: 15px; line-height: 1.6; font-family: 'Consolas', monospace; font-size: 13px; }
-.action-row { display: flex; gap: 12px; margin-top: 12px; }
+.scroll-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-xs); }
+.view-title { color: var(--text-primary); font-size: 18px; font-weight: normal; margin-bottom: var(--space-sm); }
+.settings-panel { background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-3xl); }
+.memory-subtitle { color: var(--text-muted); font-size: 13px; margin-top: var(--space-xs); }
+.limit-tip { color: var(--text-disabled); font-size: 12px; font-family: var(--font-mono); }
+.upload-label { display: block; width: 100%; padding: var(--space-4xl); border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; color: var(--text-muted); cursor: pointer; transition: border-color var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard); margin: var(--space-xl) 0; }
+.upload-label:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-soft); }
+.save-btn { background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); padding: var(--space-md) var(--space-xl); border-radius: var(--radius-sm); cursor: pointer; font-family: var(--font-mono); font-size: 15px; font-weight: bold; transition: background var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard); width: 100%; margin-top: var(--space-sm); }
+.save-btn:hover:not(:disabled) { background: var(--accent); color: var(--text-inverse); box-shadow: var(--shadow-glow-soft); }
+.save-btn:disabled { border-color: var(--border-strong); color: var(--text-disabled); cursor: not-allowed; background: transparent; }
+.panel-title { color: var(--text-primary); font-size: 15px; margin: var(--space-xl) 0 var(--space-sm); }
+.preview-panel, .locked-panel { margin-top: var(--space-xl); }
+.import-stats { display: flex; gap: var(--space-lg); color: var(--text-muted); font-size: 12px; margin-bottom: var(--space-sm); }
+.preview-text { width: 100%; min-height: 360px; resize: vertical; box-sizing: border-box; background: var(--bg-console); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text-secondary); padding: var(--space-lg); line-height: 1.6; font-family: var(--font-mono); font-size: 13px; }
+.action-row { display: flex; gap: var(--space-md); margin-top: var(--space-md); }
 .action-row .save-btn { margin-top: 0; }
-.ghost-btn { width: 40%; background: transparent; border: 1px solid #444; color: #aaa; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-family: 'Consolas'; font-size: 14px; transition: all 0.2s; }
-.ghost-btn:hover { border-color: #888; color: #fff; }
-.locked-panel { border: 1px solid rgba(255, 77, 79, 0.35); border-radius: 8px; padding: 18px; background: rgba(255, 77, 79, 0.05); }
-.locked-panel p { color: #aaa; line-height: 1.6; }
+.ghost-btn { width: 40%; background: transparent; border: 1px solid var(--border-strong); color: var(--text-muted); padding: var(--space-md) var(--space-xl); border-radius: var(--radius-sm); cursor: pointer; font-family: var(--font-mono); font-size: 14px; transition: border-color var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard); }
+.ghost-btn:hover { border-color: var(--text-muted); color: var(--text-primary); background: var(--bg-hover); }
+.locked-panel { border: 1px solid var(--danger-border); border-radius: var(--radius-md); padding: 18px; background: var(--bg-danger-soft); }
+.locked-panel p { color: var(--text-secondary); line-height: 1.6; }
 </style>
