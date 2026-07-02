@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
-import { Box, Connection, Document, Expand, Fold, Monitor, Setting, Star, Timer, Upload } from '@element-plus/icons-vue';
+import { Box, Connection, Document, Expand, Fold, Monitor, Promotion, Setting, Star, Timer, Upload } from '@element-plus/icons-vue';
 import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, pluginPermissionRequest, currentNote, connectionState, useNeuroLink } from './composables/useNeuroLink';
 import { activeAgentComponent, isImmersive } from './composables/useNeuroLink';
 import './assets/cyber-theme.css'; // 载入全局样式
@@ -132,8 +132,22 @@ onUnmounted(async () => {
 
         <div class="fixed-console" :class="{ 'error-shake': inputError }">
           <div class="context-pill" v-if="activeView==='note_detail'">📍 讨论中: {{ currentNote.title }}</div>
-          <span class="prompt-icon">❯</span>
-          <input v-model="userInput" @keyup.enter="sendChatCommand" placeholder="下达指令..." autofocus />
+          <div class="command-rail">
+            <span class="prompt-icon" aria-hidden="true">❯</span>
+            <input
+              v-model="userInput"
+              @keyup.enter="sendChatCommand"
+              placeholder="下达指令..."
+              aria-label="命令输入"
+              autofocus
+            />
+            <div class="console-actions">
+              <span class="shortcut-hint" aria-hidden="true">Enter</span>
+              <button type="button" class="send-button" title="发送指令" aria-label="发送指令" @click="sendChatCommand">
+                <Promotion aria-hidden="true" />
+              </button>
+            </div>
+          </div>
         </div>
       </main>
 
@@ -272,12 +286,28 @@ onUnmounted(async () => {
   height: 100%;
   min-width: 65px; /* 保证内部组件在缩放时不会变形乱折行 */
 }
-.view-content { flex: 1; overflow: hidden; display: flex; flex-direction: column;}
+.view-content { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;}
 
-.fixed-console { height: 65px; min-height: 65px; background: var(--bg-console); border-top: 1px solid var(--border-subtle); display: flex; align-items: center; padding: 0 var(--space-2xl); gap: var(--space-lg); position: relative; }
+.fixed-console { min-height: 78px; flex: 0 0 auto; background: linear-gradient(180deg, rgba(6, 7, 10, 0.96), var(--bg-console)); border-top: 1px solid var(--border-subtle); display: flex; align-items: center; padding: var(--space-md) var(--space-2xl); position: relative; box-shadow: 0 -12px 26px rgba(0, 0, 0, 0.22); }
 .context-pill { position: absolute; top: -25px; left: var(--space-2xl); background: var(--accent); color: var(--text-inverse); font-size: 10px; font-weight: bold; padding: var(--space-2xs) var(--space-sm); border-radius: var(--radius-xs); }
-.prompt-icon { color: var(--accent); font-weight: bold; }
-.fixed-console input { flex: 1; background: transparent; border: none; color: var(--text-primary); font-size: 15px; font-family: var(--font-mono); }
+.command-rail { width: 100%; min-height: 52px; display: flex; align-items: center; gap: var(--space-md); padding: 0 var(--space-sm) 0 var(--space-lg); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04); transition: border-color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard); }
+.command-rail:focus-within { border-color: var(--accent-border); background: rgba(69, 224, 200, 0.045); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 3px rgba(69, 224, 200, 0.08), var(--shadow-glow-soft); }
+.prompt-icon { flex: 0 0 auto; color: var(--accent); font-size: 20px; font-weight: bold; line-height: 1; text-shadow: 0 0 12px rgba(69, 224, 200, 0.32); }
+.fixed-console input { flex: 1; min-width: 0; height: 100%; background: transparent; border: none; color: var(--text-primary); font-size: 15px; font-family: var(--font-mono); outline: none; }
+.fixed-console input::placeholder { color: var(--text-disabled); }
+.fixed-console input:focus-visible { outline: none; box-shadow: none; }
+.console-actions { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-sm); }
+.shortcut-hint { height: 26px; display: inline-flex; align-items: center; padding: 0 var(--space-sm); border: 1px solid var(--border-subtle); border-radius: var(--radius-xs); background: var(--bg-hover); color: var(--text-muted); font-size: 11px; line-height: 1; }
+.send-button { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--accent-border); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-strong); cursor: pointer; transition: background var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
+.send-button:hover { background: rgba(69, 224, 200, 0.16); border-color: var(--accent); box-shadow: var(--shadow-glow-soft); }
+.send-button:active { transform: translateY(1px); }
+.send-button svg { width: 17px; height: 17px; }
+
+@media (max-width: 720px) {
+  .fixed-console { min-height: 72px; padding: var(--space-sm) var(--space-md); }
+  .command-rail { min-height: 48px; gap: var(--space-sm); padding-left: var(--space-md); }
+  .shortcut-hint { display: none; }
+}
 
 .error-shake { animation: shake 0.4s; background: var(--bg-danger-soft) !important; }
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
