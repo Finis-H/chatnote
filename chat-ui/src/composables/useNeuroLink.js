@@ -10,6 +10,33 @@ export const SystemConfig = {
     TOKEN: ""
 };
 
+export const connectionState = ref({
+    status: 'offline',
+    label: '后端离线',
+    detail: 'WebSocket: 后端离线 | Port: -- | API: http://127.0.0.1:8000',
+    port: null,
+    updatedAt: Date.now()
+});
+
+function setConnectionState(status, detailSuffix = '') {
+    const labels = {
+        connecting: '连接中',
+        connected: '已连接',
+        reconnecting: '重连中',
+        offline: '后端离线'
+    };
+    const port = SystemConfig.SERVER_PORT || null;
+    const portText = port || '--';
+    const detail = `WebSocket: ${labels[status] || status} | Port: ${portText} | API: ${SystemConfig.API_BASE}${detailSuffix ? ` | ${detailSuffix}` : ''}`;
+    connectionState.value = {
+        status,
+        label: labels[status] || status,
+        detail,
+        port,
+        updatedAt: Date.now()
+    };
+}
+
 export async function initSystemEnv() {
     try {
         SystemConfig.TOKEN = await invoke('get_run_token');
@@ -308,14 +335,18 @@ export function useNeuroLink() {
   });
 
   async function connectWebSocket() {
+    setConnectionState(ws ? 'reconnecting' : 'connecting');
     try {
       const port = await invoke('get_server_port');
+      SystemConfig.SERVER_PORT = port;
       SystemConfig.API_BASE = `http://127.0.0.1:${port}`;
       SystemConfig.WS_BASE = `ws://127.0.0.1:${port}`;
       const autoToken = await invoke('get_run_token');
+      SystemConfig.TOKEN = autoToken;
       ws = new WebSocket(`${SystemConfig.WS_BASE}/ws/${SystemConfig.TOKEN}`);
       
       ws.onopen = () => {
+        setConnectionState('connected');
         console.log("🟢 [Vault OS] 神经链路已接通！");
         inputError.value = false;
         ws.send(JSON.stringify({ type: "get_config" }));
@@ -497,9 +528,14 @@ export function useNeuroLink() {
         if (isAppDestroyed) return;
         console.warn("🔴 [Vault OS] 链路断开，3秒后自愈重连...");
         ws = null;
+        setConnectionState('reconnecting');
         setTimeout(connectWebSocket, 3000);
       };
+      ws.onerror = () => {
+        setConnectionState('offline');
+      };
     } catch (error) {
+      setConnectionState('reconnecting', '等待自动重连');
       setTimeout(connectWebSocket, 3000);
     }
   }

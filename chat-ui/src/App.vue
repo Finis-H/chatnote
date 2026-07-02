@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { Box, Connection, Document, Expand, Fold, Monitor, Setting, Star, Timer, Upload } from '@element-plus/icons-vue';
-import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, pluginPermissionRequest, currentNote, useNeuroLink } from './composables/useNeuroLink';
+import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, pluginPermissionRequest, currentNote, connectionState, useNeuroLink } from './composables/useNeuroLink';
 import { activeAgentComponent, isImmersive } from './composables/useNeuroLink';
 import './assets/cyber-theme.css'; // 载入全局样式
 
@@ -60,9 +60,19 @@ onUnmounted(async () => {
         >
           <component :is="isSidebarHidden ? Expand : Fold" aria-hidden="true" />
         </button>
-        <span class="os-name" data-tauri-drag-region>Vault OS // Core</span>
+        <span class="os-name" data-tauri-drag-region>VOS</span>
       </div>
-      <div class="status-badge" data-tauri-drag-region>ONLINE</div>
+      <div
+        class="system-status"
+        :class="`status-${connectionState.status}`"
+        :title="connectionState.detail"
+        :aria-label="connectionState.detail"
+        role="status"
+        data-tauri-drag-region
+      >
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>{{ connectionState.label }}</span>
+      </div>
     </div>
     
     <div class="workspace-body">
@@ -191,7 +201,16 @@ onUnmounted(async () => {
 .sidebar-toggle:hover { border-color: var(--border-strong); background: var(--bg-hover); color: var(--accent-strong); }
 .sidebar-toggle svg { width: 15px; height: 15px; }
 .os-name { font-size: 12px; color: var(--text-disabled); letter-spacing: 2px; }
-.status-badge { font-size: 10px; color: var(--accent); font-weight: bold; }
+.system-status { height: 24px; display: inline-flex; align-items: center; gap: var(--space-xs); padding: 0 var(--space-sm); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-panel); color: var(--text-muted); font-size: 11px; font-weight: bold; line-height: 1; }
+.status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--text-disabled); }
+.status-connected { color: var(--success); border-color: rgba(121, 214, 143, 0.36); }
+.status-connected .status-dot { background: var(--success); }
+.status-connecting { color: var(--accent); border-color: var(--accent-border); }
+.status-connecting .status-dot { background: var(--accent); animation: status-pulse 1.2s infinite; }
+.status-reconnecting { color: var(--warning); border-color: rgba(242, 189, 92, 0.42); }
+.status-reconnecting .status-dot { background: var(--warning); animation: status-pulse 1.2s infinite; }
+.status-offline { color: var(--danger); border-color: var(--danger-border); }
+.status-offline .status-dot { background: var(--danger); }
 
 .workspace-body { display: flex; flex: 1; overflow: hidden; }
 .sidebar { width: 188px; flex: 0 0 188px; background: var(--bg-shell); border-right: 1px solid var(--border-muted); overflow: hidden; display: flex; flex-direction: column; white-space: nowrap; transition: width var(--duration-slow) var(--ease-standard), flex-basis var(--duration-slow) var(--ease-standard), border-color var(--duration-slow) var(--ease-standard); }
@@ -262,6 +281,7 @@ onUnmounted(async () => {
 
 .error-shake { animation: shake 0.4s; background: var(--bg-danger-soft) !important; }
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+@keyframes status-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
 @keyframes pulse-glow { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 var(--danger-border); } 70% { transform: scale(1); box-shadow: 0 0 0 6px transparent; } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 transparent; } }
 
 /* 弹窗与 Toast 动画 */
