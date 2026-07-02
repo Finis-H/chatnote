@@ -4,7 +4,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { Box, Connection, Document, Expand, Fold, Monitor, Promotion, Setting, Star, Timer, Upload } from '@element-plus/icons-vue';
 import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, pluginPermissionRequest, currentNote, connectionState, useNeuroLink } from './composables/useNeuroLink';
-import { activeAgentComponent, isImmersive } from './composables/useNeuroLink';
+import { activeAgentComponent, activeAgentDock } from './composables/useNeuroLink';
+import AgentDock from './components/AgentDock.vue';
 import './assets/cyber-theme.css'; // 载入全局样式
 
 // 懒加载视窗组件，极致优化初始启动速度
@@ -118,7 +119,7 @@ onUnmounted(async () => {
         </div>
       </aside>
 
-      <main class="center-viewport" :class="{ 'squeezed': activeAgentComponent && isImmersive }">
+      <main class="center-viewport" :class="{ 'squeezed': activeAgentComponent && activeAgentDock.mode === 'focus' }">
         <div class="view-content">
           <TerminalView v-show="activeView === 'chat' || activeView === 'temp_chat'" />
           <KnowledgeListView v-if="activeView === 'news'" type="news" />
@@ -151,14 +152,7 @@ onUnmounted(async () => {
         </div>
       </main>
 
-      <aside class="dynamic-sidebar" :class="{ 'sidebar-open': activeAgentComponent !== null, 'sidebar-immersive': isImmersive }">
-        <div class="sidebar-content" v-if="activeAgentComponent">
-          <component 
-            :is="activeAgentComponent" 
-            :is-immersive="isImmersive" 
-          />
-        </div>
-      </aside>
+      <AgentDock />
 
     </div> <div class="custom-modal-overlay" v-if="deleteModal.show" @click="cancelDelete">
       <div class="custom-modal" @click.stop>
@@ -251,7 +245,7 @@ onUnmounted(async () => {
   display: flex; 
   flex-direction: column; 
   background: var(--bg-shell); 
-  min-width: 400px; 
+  min-width: 320px; 
   overflow: hidden;
   transition: opacity var(--duration-slow) var(--ease-standard), transform var(--duration-slow) var(--ease-standard); 
 }
@@ -260,31 +254,6 @@ onUnmounted(async () => {
   opacity: 0.3;
   transform: scale(0.98); 
   pointer-events: none; /* 沉浸时防止误触主界面的按钮 */
-}
-.dynamic-sidebar {
-  width: 0; /* 默认隐藏 */
-  background: var(--bg-app);
-  border-left: 1px solid var(--border-muted);
-  transition: width var(--duration-slow) var(--ease-standard);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden; /* 收缩时切断内部溢出 */
-  z-index: 50;
-}
-/* 形态 1：侧边栏唤醒（静默陪伴模式） */
-.dynamic-sidebar.sidebar-open {
-  width: 65px; 
-}
-/* 形态 2：沉浸覆盖模式（掌控模式） */
-.dynamic-sidebar.sidebar-immersive {
-  width: 70vw; /* 占据屏幕 70% 的宽度 */
-  box-shadow: var(--shadow-popover);
-  z-index: 100;
-}
-.sidebar-content {
-  width: 100%;
-  height: 100%;
-  min-width: 65px; /* 保证内部组件在缩放时不会变形乱折行 */
 }
 .view-content { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;}
 

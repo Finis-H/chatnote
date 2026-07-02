@@ -81,6 +81,20 @@ export const systemToast = ref({ show: false, message: '' });
 export const inputError = ref(false);
 export const isImmersive = ref(false);
 export const activeAgentComponent = shallowRef(null);
+export const activeAgentDock = ref({
+  activeKey: '',
+  pluginId: '',
+  componentName: '',
+  mode: 'mini',
+  width: 420,
+  lastExpandedMode: 'dock',
+  status: 'idle',
+  unreadCount: 0,
+  lastPayload: null,
+  openedAt: null,
+  updatedAt: null
+});
+export const activeAgentDockItems = ref([]);
 export const deleteModal = ref({ show: false, note: null });
 export const pluginPermissionRequest = ref(null);
 export const isImporting = ref(false);
@@ -145,6 +159,69 @@ export const traceSummary = computed(() => {
 
 export function toggleTracePanel() {
   isTracePanelOpen.value = !isTracePanelOpen.value;
+}
+
+function resetAgentDock() {
+  activeAgentDock.value = {
+    activeKey: '',
+    pluginId: '',
+    componentName: '',
+    mode: 'mini',
+    width: 420,
+    lastExpandedMode: 'dock',
+    status: 'idle',
+    unreadCount: 0,
+    lastPayload: null,
+    openedAt: null,
+    updatedAt: null
+  };
+  activeAgentDockItems.value = [];
+}
+
+function normalizeDockMode(state) {
+  if (state === 'mini' || state === 'collapsed') return 'mini';
+  if (state === 'dock' || state === 'sidebar') return 'dock';
+  return 'focus';
+}
+
+function openAgentDockFromMessage(data) {
+  const mode = normalizeDockMode(data.state);
+  const key = `${data.target_panel}:${data.target_component}`;
+  const existing = activeAgentDockItems.value.find(item => item.key === key);
+  const component = existing?.component || loadVpmComponent(data.target_panel, data.target_component);
+  activeAgentComponent.value = component;
+  isImmersive.value = mode !== 'mini';
+  const item = {
+    ...(existing || {}),
+    key,
+    pluginId: data.target_panel,
+    componentName: data.target_component,
+    component,
+    mode: 'expanded',
+    status: data.type === 'error' ? 'error' : 'running',
+    unreadCount: mode === 'mini' ? ((existing?.unreadCount || 0) + 1) : 0,
+    collapsed: false,
+    lastPayload: data,
+    openedAt: existing?.openedAt || Date.now(),
+    updatedAt: Date.now()
+  };
+  activeAgentDockItems.value = existing
+    ? activeAgentDockItems.value.map(entry => entry.key === key ? item : entry)
+    : [...activeAgentDockItems.value, item];
+  activeAgentDock.value = {
+    ...activeAgentDock.value,
+    activeKey: key,
+    pluginId: data.target_panel,
+    componentName: data.target_component,
+    mode,
+    width: activeAgentDock.value.width || 420,
+    lastExpandedMode: mode === 'mini' ? (activeAgentDock.value.lastExpandedMode || 'dock') : mode,
+    status: data.type === 'error' ? 'error' : 'running',
+    unreadCount: mode === 'mini' ? (activeAgentDock.value.unreadCount || 0) + 1 : 0,
+    lastPayload: data,
+    openedAt: activeAgentDock.value.pluginId === data.target_panel ? activeAgentDock.value.openedAt : Date.now(),
+    updatedAt: Date.now()
+  };
 }
 
 let ws = null;
@@ -323,7 +400,7 @@ export function useNeuroLink() {
     SystemConfig, sysConfig, activeView, previousView, newsList, favoritesList,
     pluginsList, globalMessages, noteThreads, currentNote, pendingMemory,
     isThinking, userInput, systemToast, inputError, isImmersive,
-    activeAgentComponent, deleteModal, pluginPermissionRequest, respondPluginPermission, isImporting, importFile,
+    activeAgentComponent, activeAgentDock, activeAgentDockItems, deleteModal, pluginPermissionRequest, respondPluginPermission, isImporting, importFile,
     PROFILE_IMPORT_MAX_CHARS, profileImportSessionId, profileImportPreview,
     profileImportStage, profileImportLockReason, profileImportPendingIds,
     profileImportOriginalLength, profileImportNormalizedLength, profileImportPendingCount,
@@ -390,6 +467,7 @@ export function useNeuroLink() {
           activeView.value = 'temp_chat';
           activeAgentComponent.value = null;
           isImmersive.value = false;
+          resetAgentDock();
           showToast("临时会话已开启。");
         }
         else if (data.type === 'temp_session_ended') {
@@ -401,6 +479,7 @@ export function useNeuroLink() {
             tempIsThinking.value = false;
             activeAgentComponent.value = null;
             isImmersive.value = false;
+            resetAgentDock();
             if (activeView.value === 'temp_chat') activeView.value = 'chat';
           }
           showToast("临时会话已结束。");
@@ -434,6 +513,14 @@ export function useNeuroLink() {
         else if (data.type === 'status' && data.content === 'done') {
           if (incomingSessionId === tempSessionId.value && incomingSessionId !== 'main') tempIsThinking.value = false;
           else mainIsThinking.value = false;
+          if (activeAgentDock.value.pluginId && activeAgentDock.value.status === 'running') {
+            activeAgentDock.value = { ...activeAgentDock.value, status: 'success', updatedAt: Date.now() };
+            activeAgentDockItems.value = activeAgentDockItems.value.map(item => (
+              item.key === activeAgentDock.value.activeKey && item.status === 'running'
+                ? { ...item, status: 'success', updatedAt: Date.now() }
+                : item
+            ));
+          }
         }
         else if (data.type === 'trace_event') {
           upsertTraceEvent(data);
@@ -490,15 +577,15 @@ export function useNeuroLink() {
           console.log(`🪄 收到中枢 UI 指令：${data.target_panel} -> ${data.state}`);
           if (data.state === 'closed') {
             activeAgentComponent.value = null;
+            isImmersive.value = false;
+            resetAgentDock();
             return;
           }
           if (!data.target_component) {
               console.error(` [VPM 协议错误] 缺少 target_component，无法加载 UI`);
               return;
           }
-          // 🚀 恢复经典调用：仅需 2 个参数，URL组装和上下文全部由底层代理
-          activeAgentComponent.value = loadVpmComponent(data.target_panel, data.target_component);
-          isImmersive.value = (data.state === 'immersive' || data.state === undefined);
+          openAgentDockFromMessage(data);
         }
         
         else if (data.target_panel) {
@@ -510,9 +597,7 @@ export function useNeuroLink() {
                 return;
             }
             
-            // 🚀 恢复经典调用
-            activeAgentComponent.value = loadVpmComponent(data.target_panel, data.target_component);
-            isImmersive.value = (data.state === 'immersive' || data.state === undefined);
+            openAgentDockFromMessage(data);
             
             const eventName = `vpm_ws_${data.target_panel}`;
             [300, 800, 1500, 3000].forEach(delay => {
