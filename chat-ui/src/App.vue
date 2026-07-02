@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
+import { Box, Connection, Document, Expand, Fold, Monitor, Setting, Star, Timer, Upload } from '@element-plus/icons-vue';
 import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, pluginPermissionRequest, currentNote, useNeuroLink } from './composables/useNeuroLink';
 import { activeAgentComponent, isImmersive } from './composables/useNeuroLink';
 import './assets/cyber-theme.css'; // 载入全局样式
@@ -16,9 +17,9 @@ const VpmCenterView = defineAsyncComponent(() => import('./views/VpmCenterView.v
 const ProfileImportView = defineAsyncComponent(() => import('./views/ProfileImportView.vue'));
 const { connectWebSocket, destroyLink, sendChatCommand, switchView, confirmDelete, startTempSession, respondPluginPermission } = useNeuroLink();
 const appWindow = getCurrentWindow();
-const isSidebarCollapsed = ref(false);
+const isSidebarHidden = ref(false);
 
-function toggleSidebar() { isSidebarCollapsed.value = !isSidebarCollapsed.value; }
+function toggleSidebar() { isSidebarHidden.value = !isSidebarHidden.value; }
 function cancelDelete() { deleteModal.value.show = false; }
 function handleKeyDown(event) { if (event.key === 'Escape') appWindow.hide(); }
 
@@ -49,7 +50,16 @@ onUnmounted(async () => {
   <div class="magic-box" data-tauri-drag-region>
     <div class="title-bar" data-tauri-drag-region>
       <div class="left-group">
-        <button class="fold-btn" @click="toggleSidebar">≡</button>
+        <button
+          type="button"
+          class="sidebar-toggle"
+          :aria-expanded="!isSidebarHidden"
+          aria-controls="primary-sidebar"
+          :title="isSidebarHidden ? '显示左侧导航' : '隐藏左侧导航'"
+          @click="toggleSidebar"
+        >
+          <component :is="isSidebarHidden ? Expand : Fold" aria-hidden="true" />
+        </button>
         <span class="os-name" data-tauri-drag-region>Vault OS // Core</span>
       </div>
       <div class="status-badge" data-tauri-drag-region>ONLINE</div>
@@ -57,33 +67,44 @@ onUnmounted(async () => {
     
     <div class="workspace-body">
       
-      <aside class="sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
+      <aside id="primary-sidebar" class="sidebar" :class="{ 'sidebar-hidden': isSidebarHidden }" aria-label="Vault OS 主导航">
         <div class="nav-group">
-          <div class="nav-item" :class="{active: activeView==='chat'}" @click="switchView('chat')">
-            <span class="icon">💬</span><span class="label">主控终端</span>
-          </div>
-          <div class="nav-item" :class="{active: activeView==='news'}" @click="switchView('news')">
-            <span class="icon">📰</span><span class="label">新闻信息</span>
-          </div>
-          <div class="nav-item" :class="{active: activeView==='favorites'}" @click="switchView('favorites')">
-            <span class="icon">⭐</span><span class="label">订阅收藏</span>
-          </div>
-          <div class="nav-item" :class="{active: activeView==='memory'}" @click="switchView('memory')">
-            <span class="icon">🧠</span><span class="label">记忆同步</span>
-            <span class="badge pulse-anim" v-if="pendingCount > 0">{{ pendingCount }}</span>
-          </div>
-          <div class="nav-item" :class="{active: activeView==='profile_import'}" @click="switchView('profile_import')">
-            <span class="icon">🌱</span><span class="label">画像导入</span>
-          </div>
-          <div class="nav-item" :class="{active: activeView==='settings'}" @click="switchView('settings')">
-            <span class="icon">⚙️</span><span class="label">引擎设置</span>
-          </div>
-          <div class="nav-item" :class="{active: activeView==='vpm_center'}" @click="switchView('vpm_center')">
-            <span class="icon">📦</span><span class="label">插件中心</span>
-          </div>
-          <div class="nav-item" :class="{active: activeView==='temp_chat'}" @click="startTempSession">
-            <span class="icon">⏱</span><span class="label">临时会话</span>
-          </div>
+          <section class="nav-section" aria-labelledby="nav-execution-title">
+            <div id="nav-execution-title" class="nav-section-title">执行</div>
+            <button type="button" class="nav-item" :class="{active: activeView==='chat'}" @click="switchView('chat')">
+              <span class="icon"><Monitor aria-hidden="true" /></span><span class="label">主控终端</span>
+            </button>
+            <button type="button" class="nav-item" :class="{active: activeView==='temp_chat'}" @click="startTempSession">
+              <span class="icon"><Timer aria-hidden="true" /></span><span class="label">临时会话</span>
+            </button>
+          </section>
+
+          <section class="nav-section" aria-labelledby="nav-knowledge-title">
+            <div id="nav-knowledge-title" class="nav-section-title">知识</div>
+            <button type="button" class="nav-item" :class="{active: activeView==='news'}" @click="switchView('news')">
+              <span class="icon"><Document aria-hidden="true" /></span><span class="label">新闻信息</span>
+            </button>
+            <button type="button" class="nav-item" :class="{active: activeView==='favorites'}" @click="switchView('favorites')">
+              <span class="icon"><Star aria-hidden="true" /></span><span class="label">订阅收藏</span>
+            </button>
+            <button type="button" class="nav-item" :class="{active: activeView==='memory'}" @click="switchView('memory')">
+              <span class="icon"><Connection aria-hidden="true" /></span><span class="label">记忆同步</span>
+              <span class="badge pulse-anim" v-if="pendingCount > 0">{{ pendingCount }}</span>
+            </button>
+            <button type="button" class="nav-item" :class="{active: activeView==='profile_import'}" @click="switchView('profile_import')">
+              <span class="icon"><Upload aria-hidden="true" /></span><span class="label">画像导入</span>
+            </button>
+          </section>
+
+          <section class="nav-section" aria-labelledby="nav-system-title">
+            <div id="nav-system-title" class="nav-section-title">系统</div>
+            <button type="button" class="nav-item" :class="{active: activeView==='settings'}" @click="switchView('settings')">
+              <span class="icon"><Setting aria-hidden="true" /></span><span class="label">引擎设置</span>
+            </button>
+            <button type="button" class="nav-item badge-ready" :class="{active: activeView==='vpm_center'}" @click="switchView('vpm_center')">
+              <span class="icon"><Box aria-hidden="true" /></span><span class="label">插件中心</span>
+            </button>
+          </section>
         </div>
       </aside>
 
@@ -166,20 +187,30 @@ onUnmounted(async () => {
 .magic-box { display: flex; flex-direction: column; width: 100vw; height: 100vh; overflow: hidden; background: var(--bg-app); font-family: var(--font-mono); color: var(--text-secondary); }
 .title-bar { height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-lg); background: var(--bg-console); border-bottom: 1px solid var(--border-subtle); user-select: none; }
 .left-group { display: flex; align-items: center; }
-.fold-btn { background: none; border: none; color: var(--text-primary); font-size: 20px; cursor: pointer; margin-right: var(--space-lg); border-radius: var(--radius-xs); }
+.sidebar-toggle { width: 26px; height: 26px; margin-right: var(--space-md); border: 1px solid transparent; border-radius: var(--radius-xs); display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); background: transparent; cursor: pointer; transition: background var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard); }
+.sidebar-toggle:hover { border-color: var(--border-strong); background: var(--bg-hover); color: var(--accent-strong); }
+.sidebar-toggle svg { width: 15px; height: 15px; }
 .os-name { font-size: 12px; color: var(--text-disabled); letter-spacing: 2px; }
 .status-badge { font-size: 10px; color: var(--accent); font-weight: bold; }
 
 .workspace-body { display: flex; flex: 1; overflow: hidden; }
-.sidebar { width: 200px; background: var(--bg-shell); border-right: 1px solid var(--border-muted); transition: width var(--duration-slow) var(--ease-standard); overflow: hidden; display: flex; flex-direction: column; white-space: nowrap; }
-.sidebar.collapsed { width: 60px; }
-.sidebar.collapsed .label { opacity: 0; pointer-events: none; }
+.sidebar { width: 188px; flex: 0 0 188px; background: var(--bg-shell); border-right: 1px solid var(--border-muted); overflow: hidden; display: flex; flex-direction: column; white-space: nowrap; transition: width var(--duration-slow) var(--ease-standard), flex-basis var(--duration-slow) var(--ease-standard), border-color var(--duration-slow) var(--ease-standard); }
+.sidebar.sidebar-hidden { width: 0; flex-basis: 0; border-right-color: transparent; }
 .side-right { border-right: none; border-left: 1px solid var(--border-muted); }
-.nav-group { padding: var(--space-lg) 0; }
-.nav-item { padding: var(--space-md) var(--space-xl); cursor: pointer; display: flex; align-items: center; gap: var(--space-lg); color: var(--text-muted); transition: background var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard); border-left: 2px solid transparent; box-sizing: border-box; }
-.nav-item:hover, .nav-item.active { background: var(--bg-selected); color: var(--accent-strong); border-left-color: var(--accent); }
-.nav-item .icon { width: 20px; flex: 0 0 20px; text-align: center; font-size: 18px; line-height: 1; }
-.badge { background: var(--danger); color: var(--text-primary); font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: var(--radius-pill); margin-left: auto; }
+.nav-group { padding: var(--space-sm) 0; display: flex; flex-direction: column; gap: var(--space-xs); }
+.nav-section { padding: var(--space-2xs) 0 var(--space-xs); }
+.nav-section:last-child { border-bottom: none; }
+.nav-section-title { padding: var(--space-xs) var(--space-lg); color: var(--text-disabled); font-size: 10px; font-weight: bold; letter-spacing: 0.8px; }
+.nav-item { width: 100%; min-height: 35px; padding: var(--space-xs) var(--space-md) var(--space-xs) var(--space-lg); cursor: pointer; display: flex; align-items: center; gap: var(--space-sm); color: var(--text-muted); background: transparent; border: 0; border-left: 2px solid transparent; border-radius: 0; box-sizing: border-box; font: inherit; text-align: left; transition: background var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard); }
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); border-left-color: var(--border-strong); }
+.nav-item.active { background: var(--accent-soft); color: var(--accent-strong); border-left-color: var(--accent); box-shadow: none; }
+.nav-item:focus-visible { position: relative; z-index: 1; background: var(--bg-hover-strong); color: var(--accent-strong); }
+.nav-item .icon { width: 18px; height: 18px; flex: 0 0 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-disabled); line-height: 1; }
+.nav-item .icon svg { width: 15px; height: 15px; }
+.nav-item:hover .icon, .nav-item.active .icon { color: var(--accent-strong); }
+.nav-item .label { overflow: hidden; text-overflow: ellipsis; }
+.nav-item.badge-ready::after { content: ''; min-width: 20px; height: 18px; margin-left: auto; visibility: hidden; }
+.badge { min-width: 20px; height: 18px; display: inline-flex; align-items: center; justify-content: center; background: var(--danger); color: var(--text-primary); font-size: 11px; font-weight: bold; padding: 0 var(--space-xs); border-radius: var(--radius-pill); margin-left: auto; }
 .pulse-anim { animation: pulse-glow 1.5s infinite; }
 
 .center-viewport { 
