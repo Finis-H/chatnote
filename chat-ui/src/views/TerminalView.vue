@@ -210,7 +210,7 @@ const handleScroll = async (e) => {
       <div v-for="(m, i) in processedMessages" :key="'msg_'+i" :class="['bubble', m.role]">
         <CyberMarkdown v-if="m.displayContent" :text="m.displayContent" />
       </div>
-      <div v-if="isThinking" class="thinking-cursor">大脑全速运转中...</div>
+      <div v-if="isThinking" class="thinking-cursor">正在生成回复...</div>
     </div>
   </div>
 </template>

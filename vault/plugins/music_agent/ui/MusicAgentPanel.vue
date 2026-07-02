@@ -234,7 +234,7 @@ onMounted(() => {
         playlist.value = newPlaylist;
         currentIndex.value = 0;
         currentTrack.value = playlist.value[0];
-        sysMsg.value = `📥 接收到管家下发的 ${newPlaylist.length} 首临时资产...`;
+        sysMsg.value = `已接收系统下发的 ${newPlaylist.length} 首临时资产...`;
         
         setTimeout(attemptPlay, 100);
       }
@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
   clearTimeout(watchdogTimer);
   if (audioPlayer.value) {
     audioPlayer.value.pause();
-    // 组件被销毁时同样执行拔管操作，防止隐形内存泄漏
+    // 组件卸载时释放音频资源，避免后台占用。
     audioPlayer.value.removeAttribute('src');
     audioPlayer.value.load();
   }

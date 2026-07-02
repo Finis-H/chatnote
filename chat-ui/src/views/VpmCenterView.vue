@@ -24,7 +24,7 @@
 
     <div class="empty-state" v-else>
       <div class="scan-line"></div>
-      <p>雷达未扫描到已安装的合规 VPM 插件。</p>
+      <p>未检测到已安装的合规 VPM 插件。</p>
     </div>
   </div>
   <transition name="fade">
@@ -44,7 +44,7 @@ const openManager = (pluginId) => {
 };
 const confirmUninstall = (pluginId, pluginName) => {
   // 采用通用的兜底警告词，适用于所有自带数据的插件
-  const msg = `⚠️ 正在执行物理卸载 [${pluginName}]。\n\n这将永久销毁该插件产生的所有本地专属资产（包括图床、媒体文件）以及管家的底层 RAG 记忆。\n\n💡 强烈建议：在卸载前，先进入该插件的“配置/管理”面板执行【导出备份】。\n\n确定要继续执行“焦土政策”吗？`;
+  const msg = `正在卸载 [${pluginName}]。\n\n这会删除该插件产生的本地专属资产（包括图床、媒体文件），并清理该插件关联的 RAG 向量记录。\n\n建议先进入该插件的“配置/管理”面板执行【导出备份】。\n\n确定要继续卸载吗？`;
   
   if (window.confirm(msg)) {
     sendWsCommand({ type: "uninstall_plugin", plugin_id: pluginId });

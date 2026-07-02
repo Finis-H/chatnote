@@ -1,7 +1,7 @@
 <template>
   <div class="floating-os-window" :style="windowStyle" @mousedown="bringToFront" :class="{ 'is-maximized': isMaximized }">
     <div class="pm-header" @mousedown="startDrag">
-      <h2>💿 情绪打碟机 - 后台管理矩阵</h2>
+      <h2>音乐资产管理</h2>
       <div class="win-actions">
         <button class="pm-btn maximize-btn" @click.stop="toggleMaximize">
           {{ isMaximized ? '🗗' : '🗖' }}
@@ -29,13 +29,13 @@
                 <td class="url-cell" :title="track.url">{{ track.url }}</td>
                 <td>
                   <template v-if="confirmingDelete === track.url">
-                    <button class="action-btn text-red confirm-text" @click="deleteTrack(track.url)">确定抹除</button>
+                    <button class="action-btn text-red confirm-text" @click="deleteTrack(track.url)">确认删除</button>
                     <button class="action-btn text-gray" @click="confirmingDelete = null">取消</button>
                   </template>
                   <template v-else>
                     <button class="action-btn text-blue" @click="openEdit(track)" title="修改资产">✏️</button>
                     <button class="action-btn text-yellow" @click="markDead(track.url)" title="标记失效">⚠️</button>
-                    <button class="action-btn text-red" @click="confirmingDelete = track.url" title="物理抹除">🗑️</button>
+                    <button class="action-btn text-red" @click="confirmingDelete = track.url" title="删除资产">🗑️</button>
                   </template>
                 </td>
               </tr>
@@ -85,7 +85,7 @@
         </div>
         <div class="form-actions">
           <span class="sys-msg" :class="{'error': sysMsg.includes('🚨')}">{{ sysMsg }}</span>
-          <button class="cyber-submit-btn" @click="submitForm" :disabled="isSubmitting">{{ isSubmitting ? '封存中...' : (currentTab === 'edit' ? '✦ 提交修改' : '✦ 提交入库') }}</button>
+          <button class="cyber-submit-btn" @click="submitForm" :disabled="isSubmitting">{{ isSubmitting ? '保存中...' : (currentTab === 'edit' ? '提交修改' : '提交入库') }}</button>
         </div>
       </div>
     </div>
@@ -98,7 +98,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { SystemConfig } from 'vault:useNeuroLink';
 
-// OS 视窗物理引擎：拖拽、缩放与最大化
+// OS 视窗交互：拖拽、缩放与最大化
 const winPos = ref({ x: window.innerWidth/2 - 400, y: window.innerHeight/2 - 300 });
 const winSize = ref({ w: 800, h: 600 });
 const zIndex = ref(9999);

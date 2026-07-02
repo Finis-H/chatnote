@@ -10,6 +10,33 @@ export const SystemConfig = {
     TOKEN: ""
 };
 
+export const connectionState = ref({
+    status: 'offline',
+    label: '后端离线',
+    detail: 'WebSocket: 后端离线 | Port: -- | API: http://127.0.0.1:8000',
+    port: null,
+    updatedAt: Date.now()
+});
+
+function setConnectionState(status, detailSuffix = '') {
+    const labels = {
+        connecting: '连接中',
+        connected: '已连接',
+        reconnecting: '重连中',
+        offline: '后端离线'
+    };
+    const port = SystemConfig.SERVER_PORT || null;
+    const portText = port || '--';
+    const detail = `WebSocket: ${labels[status] || status} | Port: ${portText} | API: ${SystemConfig.API_BASE}${detailSuffix ? ` | ${detailSuffix}` : ''}`;
+    connectionState.value = {
+        status,
+        label: labels[status] || status,
+        detail,
+        port,
+        updatedAt: Date.now()
+    };
+}
+
 export async function initSystemEnv() {
     try {
         SystemConfig.TOKEN = await invoke('get_run_token');
@@ -54,6 +81,20 @@ export const systemToast = ref({ show: false, message: '' });
 export const inputError = ref(false);
 export const isImmersive = ref(false);
 export const activeAgentComponent = shallowRef(null);
+export const activeAgentDock = ref({
+  activeKey: '',
+  pluginId: '',
+  componentName: '',
+  mode: 'mini',
+  width: 420,
+  lastExpandedMode: 'dock',
+  status: 'idle',
+  unreadCount: 0,
+  lastPayload: null,
+  openedAt: null,
+  updatedAt: null
+});
+export const activeAgentDockItems = ref([]);
 export const deleteModal = ref({ show: false, note: null });
 export const pluginPermissionRequest = ref(null);
 export const isImporting = ref(false);
@@ -118,6 +159,69 @@ export const traceSummary = computed(() => {
 
 export function toggleTracePanel() {
   isTracePanelOpen.value = !isTracePanelOpen.value;
+}
+
+function resetAgentDock() {
+  activeAgentDock.value = {
+    activeKey: '',
+    pluginId: '',
+    componentName: '',
+    mode: 'mini',
+    width: 420,
+    lastExpandedMode: 'dock',
+    status: 'idle',
+    unreadCount: 0,
+    lastPayload: null,
+    openedAt: null,
+    updatedAt: null
+  };
+  activeAgentDockItems.value = [];
+}
+
+function normalizeDockMode(state) {
+  if (state === 'mini' || state === 'collapsed') return 'mini';
+  if (state === 'dock' || state === 'sidebar') return 'dock';
+  return 'focus';
+}
+
+function openAgentDockFromMessage(data) {
+  const mode = normalizeDockMode(data.state);
+  const key = `${data.target_panel}:${data.target_component}`;
+  const existing = activeAgentDockItems.value.find(item => item.key === key);
+  const component = existing?.component || loadVpmComponent(data.target_panel, data.target_component);
+  activeAgentComponent.value = component;
+  isImmersive.value = mode !== 'mini';
+  const item = {
+    ...(existing || {}),
+    key,
+    pluginId: data.target_panel,
+    componentName: data.target_component,
+    component,
+    mode: 'expanded',
+    status: data.type === 'error' ? 'error' : 'running',
+    unreadCount: mode === 'mini' ? ((existing?.unreadCount || 0) + 1) : 0,
+    collapsed: false,
+    lastPayload: data,
+    openedAt: existing?.openedAt || Date.now(),
+    updatedAt: Date.now()
+  };
+  activeAgentDockItems.value = existing
+    ? activeAgentDockItems.value.map(entry => entry.key === key ? item : entry)
+    : [...activeAgentDockItems.value, item];
+  activeAgentDock.value = {
+    ...activeAgentDock.value,
+    activeKey: key,
+    pluginId: data.target_panel,
+    componentName: data.target_component,
+    mode,
+    width: activeAgentDock.value.width || 420,
+    lastExpandedMode: mode === 'mini' ? (activeAgentDock.value.lastExpandedMode || 'dock') : mode,
+    status: data.type === 'error' ? 'error' : 'running',
+    unreadCount: mode === 'mini' ? (activeAgentDock.value.unreadCount || 0) + 1 : 0,
+    lastPayload: data,
+    openedAt: activeAgentDock.value.pluginId === data.target_panel ? activeAgentDock.value.openedAt : Date.now(),
+    updatedAt: Date.now()
+  };
 }
 
 let ws = null;
@@ -296,7 +400,7 @@ export function useNeuroLink() {
     SystemConfig, sysConfig, activeView, previousView, newsList, favoritesList,
     pluginsList, globalMessages, noteThreads, currentNote, pendingMemory,
     isThinking, userInput, systemToast, inputError, isImmersive,
-    activeAgentComponent, deleteModal, pluginPermissionRequest, respondPluginPermission, isImporting, importFile,
+    activeAgentComponent, activeAgentDock, activeAgentDockItems, deleteModal, pluginPermissionRequest, respondPluginPermission, isImporting, importFile,
     PROFILE_IMPORT_MAX_CHARS, profileImportSessionId, profileImportPreview,
     profileImportStage, profileImportLockReason, profileImportPendingIds,
     profileImportOriginalLength, profileImportNormalizedLength, profileImportPendingCount,
@@ -308,15 +412,19 @@ export function useNeuroLink() {
   });
 
   async function connectWebSocket() {
+    setConnectionState(ws ? 'reconnecting' : 'connecting');
     try {
       const port = await invoke('get_server_port');
+      SystemConfig.SERVER_PORT = port;
       SystemConfig.API_BASE = `http://127.0.0.1:${port}`;
       SystemConfig.WS_BASE = `ws://127.0.0.1:${port}`;
       const autoToken = await invoke('get_run_token');
+      SystemConfig.TOKEN = autoToken;
       ws = new WebSocket(`${SystemConfig.WS_BASE}/ws/${SystemConfig.TOKEN}`);
       
       ws.onopen = () => {
-        console.log("🟢 [Vault OS] 神经链路已接通！");
+        setConnectionState('connected');
+        console.log("[Vault OS] WebSocket 已连接。");
         inputError.value = false;
         ws.send(JSON.stringify({ type: "get_config" }));
         ws.send(JSON.stringify({ type: "fetch_plugins" }));
@@ -359,6 +467,7 @@ export function useNeuroLink() {
           activeView.value = 'temp_chat';
           activeAgentComponent.value = null;
           isImmersive.value = false;
+          resetAgentDock();
           showToast("临时会话已开启。");
         }
         else if (data.type === 'temp_session_ended') {
@@ -370,6 +479,7 @@ export function useNeuroLink() {
             tempIsThinking.value = false;
             activeAgentComponent.value = null;
             isImmersive.value = false;
+            resetAgentDock();
             if (activeView.value === 'temp_chat') activeView.value = 'chat';
           }
           showToast("临时会话已结束。");
@@ -403,6 +513,14 @@ export function useNeuroLink() {
         else if (data.type === 'status' && data.content === 'done') {
           if (incomingSessionId === tempSessionId.value && incomingSessionId !== 'main') tempIsThinking.value = false;
           else mainIsThinking.value = false;
+          if (activeAgentDock.value.pluginId && activeAgentDock.value.status === 'running') {
+            activeAgentDock.value = { ...activeAgentDock.value, status: 'success', updatedAt: Date.now() };
+            activeAgentDockItems.value = activeAgentDockItems.value.map(item => (
+              item.key === activeAgentDock.value.activeKey && item.status === 'running'
+                ? { ...item, status: 'success', updatedAt: Date.now() }
+                : item
+            ));
+          }
         }
         else if (data.type === 'trace_event') {
           upsertTraceEvent(data);
@@ -436,7 +554,7 @@ export function useNeuroLink() {
           showToast(result.ok ? `✅ ${result.message || '系统核心已热重载！'}` : `⚠️ ${result.message || '配置体检未通过，已保留当前配置。'}${failedSuffix}`);
           if (result.ok) switchView('chat');
         }
-        else if (data.type === 'system_toast') showToast("🩺 [管家汇报] " + data.content);
+        else if (data.type === 'system_toast') showToast("[系统通知] " + data.content);
         else if (data.type === 'profile_import_state') {
           applyProfileImportState(data.content || {});
         }
@@ -459,15 +577,15 @@ export function useNeuroLink() {
           console.log(`🪄 收到中枢 UI 指令：${data.target_panel} -> ${data.state}`);
           if (data.state === 'closed') {
             activeAgentComponent.value = null;
+            isImmersive.value = false;
+            resetAgentDock();
             return;
           }
           if (!data.target_component) {
               console.error(` [VPM 协议错误] 缺少 target_component，无法加载 UI`);
               return;
           }
-          // 🚀 恢复经典调用：仅需 2 个参数，URL组装和上下文全部由底层代理
-          activeAgentComponent.value = loadVpmComponent(data.target_panel, data.target_component);
-          isImmersive.value = (data.state === 'immersive' || data.state === undefined);
+          openAgentDockFromMessage(data);
         }
         
         else if (data.target_panel) {
@@ -479,9 +597,7 @@ export function useNeuroLink() {
                 return;
             }
             
-            // 🚀 恢复经典调用
-            activeAgentComponent.value = loadVpmComponent(data.target_panel, data.target_component);
-            isImmersive.value = (data.state === 'immersive' || data.state === undefined);
+            openAgentDockFromMessage(data);
             
             const eventName = `vpm_ws_${data.target_panel}`;
             [300, 800, 1500, 3000].forEach(delay => {
@@ -495,11 +611,16 @@ export function useNeuroLink() {
       
       ws.onclose = () => {
         if (isAppDestroyed) return;
-        console.warn("🔴 [Vault OS] 链路断开，3秒后自愈重连...");
+        console.warn("[Vault OS] 连接断开，3 秒后自动重连...");
         ws = null;
+        setConnectionState('reconnecting');
         setTimeout(connectWebSocket, 3000);
       };
+      ws.onerror = () => {
+        setConnectionState('offline');
+      };
     } catch (error) {
+      setConnectionState('reconnecting', '等待自动重连');
       setTimeout(connectWebSocket, 3000);
     }
   }
@@ -527,7 +648,7 @@ export function useNeuroLink() {
     if (!userInput.value || !userInput.value.trim()) return triggerErrorShake();
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       triggerErrorShake();
-      const errorMsg = { role: 'ai', content: '🚨 [系统报错] 无法连接到 Python 大脑！' };
+      const errorMsg = { role: 'ai', content: '[系统报错] 无法连接到 Python 后端。' };
       isTempSession.value ? tempMessages.value.push(errorMsg) : (activeView.value === 'note_detail' ? noteThreads.value[currentNote.value.id].push(errorMsg) : globalMessages.value.push(errorMsg));
       return;
     }
@@ -561,7 +682,7 @@ export function useNeuroLink() {
       tempMessages.value.push({ role: 'user', content: msg });
     } else if (activeView.value === 'note_detail') {
       noteThreads.value[currentNote.value.id].push({ role: 'user', content: msg });
-      finalPayload= `[当前操作界面：笔记阅读模式]\n参考文章：《${currentNote.value.title}》\n部分内容：${currentNote.value.content.substring(0, 1500)}\n\n【系统提示】：如果BOSS的问题与文章相关，请优先基于文章回答；如果问题是通用询问或查询最新资讯，请直接忽略文章，务必调用 web_search 工具获取最新信息。\n\nBOSS的指令：${msg}`;
+      finalPayload= `[当前操作界面：笔记阅读模式]\n参考文章：《${currentNote.value.title}》\n部分内容：${currentNote.value.content.substring(0, 1500)}\n\n【系统提示】：如果用户的问题与文章相关，请优先基于文章回答；如果问题是通用询问或查询最新资讯，请直接忽略文章，务必调用 web_search 工具获取最新信息。\n\n用户指令：${msg}`;
     } else {
       globalMessages.value.push({ role: 'user', content: msg });
     }

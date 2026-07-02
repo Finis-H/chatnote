@@ -22,7 +22,7 @@ for stream in (sys.stdout, sys.stderr):
             pass
 
 def get_vault_root():
-    # 工业级路径寻址：全系统唯一的“绝对真理”
+    # 运行时路径寻址：全系统统一的数据根目录。
     if getattr(sys, 'frozen', False):
         # 生产环境：以打包后的 vault_engine.exe 所在的物理目录为基准
         base_dir = os.path.dirname(sys.executable)
@@ -57,27 +57,27 @@ def get_vault_root():
     return prod_vault_path
 
 VAULT_ROOT = get_vault_root()
-print(f" [外脑物理锚点] 核心资产底座: {VAULT_ROOT}")
+print(f" [运行时数据根目录] {VAULT_ROOT}")
 
 PROFILE_IMPORT_MAX_CHARS = 9000
 MUSIC_PLAY_INTENT_PATTERN = re.compile(
     r"(放歌|听歌|打碟|播放.*(歌|歌曲|音乐)|放.*(歌|歌曲|音乐)|来点.*(歌|歌曲|音乐)|听.*(歌|歌曲|音乐))"
 )
 
-#  运行时路径嗅探器 (Audit Hook)
+#  运行时路径审计器 (Audit Hook)
 def path_sniffer(event, args):
-    # 只要 Python 底层触发了文件打开动作
+    # 只要 Python 触发了文件打开动作
     if event == "open":
         file_path = args[0]
         if isinstance(file_path, str):
             # 命中规则 1：出现俄罗斯套娃
             if "vault/vault" in file_path.replace("\\", "/"):
-                print(f" [系统探针] 抓获套娃路径: {file_path}")
-            # 命中规则 2：使用了相对路径的 vault/ (在生产环境绝对不允许)
+                print(f" [路径审计] 检测到嵌套 vault 路径: {file_path}")
+            # 命中规则 2：使用了相对路径的 vault/ (生产环境不允许)
             elif not os.path.isabs(file_path) and file_path.replace("\\", "/").startswith("vault/"):
-                print(f" [系统探针] 抓获未包裹 VAULT_ROOT 的野狗路径: {file_path}")
+                print(f" [路径审计] 检测到未通过 VAULT_ROOT 定位的相对路径: {file_path}")
 
-# 激活底层的监听！
+# 激活路径审计。
 sys.addaudithook(path_sniffer)
 
 try:
@@ -126,23 +126,23 @@ class VaultOS_Terminal:
         print("="*50 + "\n")
 
     def receive_knowledge_payload(self, payload_data):
-        """提供给外部仓管 Agent 调用的接口，彻底解耦切片与入库逻辑"""
+        """提供给外部内容管理 Agent 调用的接口，解耦切片与入库逻辑"""
         command = payload_data.get("command")
         source_file = payload_data.get("source_file")
         new_hash = payload_data.get("hash", "unknown_hash")
         chunks = payload_data.get("payload", [])
 
         if command != "RAG_UPSERT" or not source_file:
-            print(" [RAG 网关] 拦截到非法或不完整的载荷指令！丢弃。")
+            print(" [RAG 网关] 拦截到非法或不完整的载荷指令，已丢弃。")
             return False
         try:
-            print(f"\n [RAG 网关] 收到来自外挂仓管的更新请求: {source_file}")
+            print(f"\n [RAG 网关] 收到外部内容更新请求: {source_file}")
             if hasattr(self.vector_db, 'delete_by_source'):
                 deleted_count = self.vector_db.delete_by_source(source_file)
             else:
                 deleted_count = 0
             if not chunks:
-                print(f" [RAG 网关] 载荷为空，已完成该文件的彻底注销。")
+                print(f" [RAG 网关] 载荷为空，已删除该来源对应的向量记录。")
                 return True
             texts = []
             metadatas = []
@@ -161,11 +161,11 @@ class VaultOS_Terminal:
                 ids.append(f"rag_{new_hash}_{i}")
             if hasattr(self.vector_db, 'add_chunks'):
                 self.vector_db.add_chunks(texts, metadatas, ids)
-                print(f"[RAG 网关] 成功同化 {len(texts)} 块高纯度记忆碎片！\n")
+                print(f"[RAG 网关] 已写入 {len(texts)} 个知识切片。\n")
                 return True
             return False
         except Exception as e:
-            print(f" [RAG 网关] 数据引流发生雪崩，执行中断: {e}")
+            print(f" [RAG 网关] 数据写入失败，执行中断: {e}")
             return False
 
     def _load_config(self):
@@ -451,7 +451,7 @@ class VaultOS_Terminal:
             
             retrieved_context = prefetch_context
             if status == "NEEDS_NEW_TOOLS":
-                suggestion = blueprint.get("suggestion_msg", "Boss，我缺少完成此任务的工具。")
+                suggestion = blueprint.get("suggestion_msg", "我缺少完成此任务的工具。")
                 missing = ", ".join(blueprint.get("missing_capabilities", []))
                 print(f" [能力探针] 发现缺失能力: {missing}")
                 answer = f" [Vault OS 架构建议]:\n{suggestion}\n\n(系统检测到缺失核心组件：{missing}。您可以前往 VPM 插件中心挂载相关能力后，再次下达该指令。)"
@@ -564,8 +564,8 @@ class VaultOS_Terminal:
                 # 2. 泛用拦截：只要黑板里产生了实际的数据产物，就触发强制播报模式！
                 if executed_tools and any(v is not None for v in safe_blackboard.values()):
                     tools_str = ", ".join(executed_tools)
-                    # 将动态工具名和最高指令，无缝拼接在用户的最后一句输入之后
-                    user_input = f"{user_input}\n\n[ 核心网关状态拦截：您的上述需求已由底层的专项 Agent ({tools_str}) 物理执行完毕！真实执行结果已写入上方的【系统任务黑板数据】。作为大管家，你现在进入“播报模式”，请严格、仅限基于黑板返回的真实数据进行总结汇报，绝对禁止动用内部训练数据进行主观推荐、编造事实或假装自己去执行！]"
+                    # 将工具执行状态拼接到用户输入之后，约束最终回复只基于黑板结果。
+                    user_input = f"{user_input}\n\n[系统任务状态：上述需求已由专项 Agent ({tools_str}) 执行完毕，真实执行结果已写入上方的【系统任务黑板数据】。请仅基于黑板返回的真实数据进行总结汇报，不要使用内部训练数据进行主观推荐、编造事实或假装自己去执行。]"
                 # ==========================================
             else:
                 retrieved_context = prefetch_context
@@ -587,24 +587,24 @@ class VaultOS_Terminal:
             self._write_to_blackbox(f"{thread_id}_butler", answer)
             return answer       
         except Exception as e:
-            error_msg = f"算力中心崩溃啦：{str(e)}"
+            error_msg = f"核心推理流程异常：{str(e)}"
             trace_emitter.emit_event("AGENT_ERROR", "FAILED", "核心推理链路异常", details={"error": str(e)})
             print(f" {error_msg}")
             return error_msg
 
     def perform_memory_surgery(self, user_command):
-        print(f"\n [记忆手术] 收到最高干预指令: {user_command}")
+        print(f"\n [记忆维护] 收到手动记忆更新请求: {user_command}")
         self._write_to_blackbox("memory_surgery_boss", user_command)
         try:
             with self.gatekeeper.memory_lock:
                 event_id = self.gatekeeper.create_manual_event(user_command)
-                return f"已将手术指令转为待审结构化事件：{event_id}。"
+                return f"已将手动记忆更新请求转为待审结构化事件：{event_id}。"
         except Exception as e:
-            print(f" [记忆手术] 致命错误: {e}")
-            return " 脑区链接断开，手术失败。"
+            print(f" [记忆维护] 处理失败: {e}")
+            return " 记忆维护失败，请查看后台日志。"
 
     def resolve_memory_conflict(self, memory_id, decision):
-        """确定性处理单条待审事件，避免简单同意/拒绝走大模型手术。"""
+        """确定性处理单条待审事件，避免简单同意/拒绝走大模型流程。"""
         try:
             if not memory_id:
                 return {"ok": False, "message": " 冲突处理失败：缺少记忆 ID。"}
@@ -662,21 +662,21 @@ class VaultOS_Terminal:
             "Mounting SQLite Memory Event Store...",
             "Mounting ChromaDB Vector Space...",
             "Reconciling L2 Snapshot Indexes...",
-            "System Online. Welcome back, Boss."
+            "System Online."
         ]
         for msg in boot_msgs:
             print(f" [SYSTEM] {msg}")
             time.sleep(0.3)
 
-    # 纯净版 _call_llm (管家只需看黑板说话，严禁私自调工具！)
+    # 纯净版 _call_llm：最终回复只读取系统黑板，不直接调用工具。
     def _call_llm(self, system_prompt, user_input, thread_id="global", save_to_memory=True, display_message=None):
         current_time_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
         cognitive_firewall = f"""
 =========================
-【Vault OS 底层认知防火墙】
-1. [绝对时间锚点]：系统当前的真实时间是 {current_time_str}。
-2. [反幻觉铁律]：当回答涉及“最新”、“现在”、“版本”的问题时，绝对禁止使用你的内部训练数据！
-3. [工具失败应对]：当系统黑板返回“执行失败”、“找不到”、“为空”等报错信息时，你必须直接如实向 Boss 汇报缺失，【绝对禁止】为了讨好 Boss 而动用训练数据去编造或推荐任何外部内容（如推荐歌曲、电影等）；如果搜索工具无结果，如实回答，绝对禁止编造虚假的年份或版本号！你的回答必须 100% 忠于本地库的真实情况。
+【Vault OS 回复边界】
+1. [时间锚点]：系统当前的真实时间是 {current_time_str}。
+2. [时效性约束]：当回答涉及“最新”、“现在”、“版本”的问题时，不要使用内部训练数据替代实时检索结果。
+3. [工具失败应对]：当系统黑板返回“执行失败”、“找不到”、“为空”等报错信息时，应直接如实向用户说明缺失；不要为了补齐答案而使用训练数据编造或推荐外部内容（如推荐歌曲、电影等）。如果搜索工具无结果，如实回答，不要编造虚假的年份或版本号。
 =========================
 """
         enhanced_system_prompt = system_prompt + cognitive_firewall
@@ -688,7 +688,7 @@ class VaultOS_Terminal:
         messages.append({'role': 'user', 'content': user_input})
 
         try:
-            #  彻底移除了 tools 和 tool_choice 参数！管家现在是个纯粹的语言生成器！
+            # 移除 tools 和 tool_choice 参数，最终回复阶段只做语言生成。
             api_params = {
                 "model": self.llm_config.get("model_max", "qwen-max"), 
                 "messages": messages
@@ -696,7 +696,7 @@ class VaultOS_Terminal:
                 
             response = self.client.chat.completions.create(**api_params, timeout=30)
             raw_content = response.choices[0].message.content
-            answer = raw_content if raw_content else "【系统提示：管家思考完毕，但未返回任何实质内容。】"
+            answer = raw_content if raw_content else "【系统提示：模型调用完成，但未返回可展示内容。】"
 
             if save_to_memory:
                 self.threads[thread_id].append({'role': 'user', 'content': display_message})
@@ -736,7 +736,7 @@ class VaultOS_Terminal:
             elif start_list != -1 and end_list != -1:
                 return json.loads(text[start_list:end_list+1])
         except Exception as e:
-            print(f" [底层JSON脱壳异常]: {e}")
+            print(f" [JSON 解析异常]: {e}")
             return None
 
     def _compile_local_tool_fallback(self, user_input: str) -> dict | None:
@@ -765,7 +765,7 @@ class VaultOS_Terminal:
 
     def _compile_jit_task(self, user_input: str, prefetch_context: str = "") -> dict:
         print(" [JIT 编译器] 正在为复杂任务绘制动态执行蓝图...")
-        # 让 CEO (JIT编译器) 也拥有时间观念
+        # 让 JIT 编译器拥有时间观念。
         current_time_str = datetime.now().strftime("%Y年%m月%d日")
         current_tools = self.registry.get_tools()
         has_third_party_tools = False
@@ -795,22 +795,22 @@ class VaultOS_Terminal:
         safe_prefetch_context = redact_text(prefetch_context) if has_third_party_tools else prefetch_context
         
         prompt = f"""
-        你是 Vault OS 的 JIT 任务编译器 (CEO)。今天的时间是 {current_time_str}。
-        主人的当前任务是: "{user_input}"
+        你是 Vault OS 的 JIT 任务编译器。今天的时间是 {current_time_str}。
+        用户的当前任务是: "{user_input}"
 
         【回答前本地记忆预读】:
         {safe_prefetch_context if safe_prefetch_context else "本轮没有命中需要预读的实体档案或建议类画像。"}
         
-        【你当前可用的工具 (手下的总监) 及其参数说明】: 
+        【你当前可用的工具及其参数说明】:
         {json.dumps(tool_specs, ensure_ascii=False)}
         
         【你的任务】：评估任务所需的能力。
-        第一步：判断主人的指令意图。
+        第一步：判断用户的指令意图。
                - 你是唯一的通用工具意图判断层；不要依赖外层关键字或固定词表。
                - 对自然语言里的隐式操作请求、插件请求、工具请求要自行理解。例如“放歌”“听歌”“来点音乐”“放首歌曲听”都应依据工具描述优先考虑 play_music_playlist；这些只是例子，不是穷举规则。
-               - 如果主人只是在闲聊、分享个人生活、陈述事实或表达喜好（例如：“我父亲喜欢吃西瓜”、“今天天气好”、“我平时爱看书”）：
-                 【立刻停止思考工具！】底层记忆路由会自动提取事件。你必须直接返回：{{"plan_status": "DIRECT_CHAT"}}
-        第二步：如果主人明确下达了需要操作的指令（如播放音乐、查询网络、操控系统），才去匹配上方工具。
+               - 如果用户只是在闲聊、分享个人生活、陈述事实或表达喜好（例如：“我父亲喜欢吃西瓜”、“今天天气好”、“我平时爱看书”）：
+                 本地记忆路由会自动提取事件。你必须直接返回：{{"plan_status": "DIRECT_CHAT"}}
+        第二步：如果用户明确下达了需要操作的指令（如播放音乐、查询网络、操控系统），才去匹配上方工具。
                - 如果有工具可以满足需求 -> 返回 "READY" 并规划 steps。
                - 如果没有任何工具能做到 -> 返回 "NEEDS_NEW_TOOLS"。
                - 如果是推荐、送礼、购买、旅行、吃饭等建议类问题，且需要最新趋势、价格、新闻或时效信息，可以调用 web_search；但搜索只能补充候选，不能覆盖上方本地记忆预读。
@@ -820,21 +820,21 @@ class VaultOS_Terminal:
         {{
             "plan_status": "READY" | "NEEDS_NEW_TOOLS" | "DIRECT_CHAT",
             "missing_capabilities": ["缺失的能力描述"],
-            "suggestion_msg": "向 Boss 汇报的一句话建议",
+            "suggestion_msg": "向用户说明的一句话建议",
             "blackboard_keys": ["需要记录在黑板上的变量名"],
             "steps": [
                 {{
                     "step_id": "s1",
                     "tool_name": "对应工具的准确 name",
                     "args": {{"参数名": "参数值"}}, 
-                    "output_to_blackboard": "必须起一个英文字段名，绝对不能为 null！"
+                    "output_to_blackboard": "必须起一个英文字段名，不能为 null"
                 }},
                 {{
                     "step_id": "s2",
                     "depends_on": ["s1"],
                     "tool_name": "另一个工具",
                     "args": {{"file_data": "$$s1的输出变量名"}}, 
-                    "output_to_blackboard": "必须起一个英文字段名，绝对不能为 null！"
+                    "output_to_blackboard": "必须起一个英文字段名，不能为 null"
                 }}
             ],
             "reasoning": "一句话解释你的规划逻辑"
@@ -948,10 +948,10 @@ class VaultOS_Terminal:
 
         while True:
             try:
-                user_input = input("\n> Boss: ").strip()
+                user_input = input("\n> User: ").strip()
                 if not user_input: continue
                 if user_input.lower() == '/exit':
-                    print(" Vault OS 进入休眠状态。")
+                    print(" Vault OS 已退出。")
                     break
                 if user_input.lower() == '/audit':
                     print(self.gatekeeper.flush_event_buffer(self._extract_memory_buffer_events, force=True).get("message"))
@@ -972,13 +972,13 @@ class VaultOS_Terminal:
                 answer = self._call_llm(final_system_prompt, user_input)
                 print(f"\n[Vault OS]:\n{answer}")
             except KeyboardInterrupt:
-                print("\n 检测到强制中断，Vault OS 进入休眠。")
+                print("\n 检测到强制中断，Vault OS 已退出。")
                 break
             except Exception as e:
-                print(f"\n 系统崩溃: {str(e)}")
+                print(f"\n 系统异常: {str(e)}")
 
     def _call_llm_json(self, prompt, user_input="执行记忆仲裁"):
-        strict_prompt = prompt + "\n\n【系统最高指令】：\n1. 你必须且只能输出合法的纯 JSON 格式！\n2. 绝对不允许包含任何解释性文字、前言后语。\n3. 不要使用 ```json 标记，直接输出以 { 或 [ 开头的纯文本！"
+        strict_prompt = prompt + "\n\n【结构化输出约束】：\n1. 只输出合法的纯 JSON 格式。\n2. 不要包含解释性文字、前言或后记。\n3. 不要使用 ```json 标记，直接输出以 { 或 [ 开头的纯文本。"
         messages = [{'role': 'system', 'content': strict_prompt}, {'role': 'user', 'content': user_input}]
         try:
             response = self.client.chat.completions.create(
@@ -1102,7 +1102,7 @@ class VaultOS_Terminal:
 要求：
 1. 修正明显错别字、病句和重复表达。
 2. 按事实、偏好、沟通方式、编程习惯、学习/项目目标等自然分组。
-3. 只保留原文已经表达的信息，绝对不要补充、推断或创造新事实。
+3. 只保留原文已经表达的信息，不要补充、推断或创造新事实。
 4. 不要输出 JSON，不要抽取记忆事件，不要写解释性前言。
 5. 输出适合用户确认的 Markdown 文本。
 """
@@ -1259,8 +1259,8 @@ class TempVaultSession(VaultOS_Terminal):
 
     def _assemble_temp_prompt(self, retrieved_context=""):
         return f"""
-你是 Vault OS 的临时会话管家。你正在一个无记忆沙盒中与 Boss 对话。
-本次会话从空白状态开始：你不能读取、推断或声称知道 Boss 的本地画像、长期记忆、历史聊天或本地知识库。
+你是 Vault OS 的临时会话助手。你正在一个无记忆沙盒中与当前用户对话。
+本次会话从空白状态开始：你不能读取、推断或声称知道用户的本地画像、长期记忆、历史聊天或本地知识库。
 
 【临时会话规则】
 1. 只根据当前临时会话上下文、用户本轮输入、以及系统工具真实返回作答。
@@ -1294,7 +1294,7 @@ class TempVaultSession(VaultOS_Terminal):
 
             retrieved_context = ""
             if status == "NEEDS_NEW_TOOLS":
-                suggestion = blueprint.get("suggestion_msg", "Boss，我缺少完成此任务的工具。")
+                suggestion = blueprint.get("suggestion_msg", "我缺少完成此任务的工具。")
                 missing = ", ".join(blueprint.get("missing_capabilities", []))
                 return f" [Vault OS 架构建议]:\n{suggestion}\n\n(临时会话检测到缺失能力：{missing}。)"
 

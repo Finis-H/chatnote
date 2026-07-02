@@ -97,12 +97,12 @@ trace_emitter.configure(VAULT_ROOT, event_bus=event_bus, run_token=SECURITY_TOKE
 plugin_security_manager.configure(VAULT_ROOT, event_bus=event_bus, internal_token=SECURITY_TOKEN)
 
 print("="*60)
-print(f" [网关启动] Vault OS 后台微服务已点火！")
-print(f" [网络嗅探] 成功锁定可用端口: {SERVER_PORT}")
+print(f" [网关启动] Vault OS 后台服务已启动。")
+print(f" [端口选择] 当前可用端口: {SERVER_PORT}")
 print(f" [安全系统] 本次运行专属 Token: {SECURITY_TOKEN}")
 print("="*60)
 
-print(" 正在唤醒底层大模型和向量引擎...")
+print(" 正在初始化大模型客户端和向量引擎...")
 vault_os = VaultOS_Terminal()
 
 
@@ -163,18 +163,18 @@ async def api_rag_ingest(request: Request):
         auth_header = request.headers.get("Authorization")
         if auth_header != f"Bearer {SECURITY_TOKEN}":
             return {"status": "error", "message": "未授权的访问拒绝进入 RAG 存储区"}  
-        # 核心防线：路径沙盒验证 (Path Sandbox)
+        # 核心边界：路径沙盒验证 (Path Sandbox)
         source_file = payload_data.get("source_file", "")
         # 1. 防御路径穿越攻击 (防范诸如 ../knowledge/xxx.md 的恶意路径)
         safe_source = os.path.normpath(source_file)
         if ".." in safe_source:
             print(f" [安全拦截] 检测到恶意路径穿越攻击: {source_file}")
             return {"status": "error", "message": "非法路径！系统已拦截。"} 
-        # 2. 权限隔离：外来 HTTP 请求【只能】操作 plugins 目录下的文件！
+        # 2. 权限隔离：外来 HTTP 请求只能操作 plugins 目录下的文件。
         allowed_prefix = os.path.normpath(PLUGINS_DIR)
         if not safe_source.startswith(allowed_prefix):
-            print(f" [越权拦截] 第三方 Agent 试图篡改系统核心记忆: {safe_source}")
-            return {"status": "error", "message": "越权操作：第三方插件仅允许操作自己的沙盒数据！"}
+            print(f" [权限拦截] 第三方 Agent 请求访问非插件目录: {safe_source}")
+            return {"status": "error", "message": "权限不足：第三方插件仅允许操作自己的沙盒数据。"}
         rel_source = os.path.relpath(safe_source, allowed_prefix)
         source_parts = rel_source.split(os.sep)
         source_plugin_id = source_parts[0] if source_parts and source_parts[0] != "." else ""
@@ -205,7 +205,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
             await websocket.send_json(event)
     consumer_task = asyncio.create_task(consume_events())
 
-    print(" [连接成功] 神经链路已打通，正在同步初始状态...")
+    print(" [连接成功] WebSocket 已连接，正在同步初始状态...")
     
     # 2. 连接刚建立时，立刻下发一次初始数据
     if hasattr(vault_os, 'threads') and vault_os.threads:
@@ -303,7 +303,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                     await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
                 except Exception:
                     await event_bus.publish({"type": "memory_data", "content": []})
-            # VPM 雷达扫描指令
+            # VPM 插件列表刷新指令
             elif cmd_type == "fetch_plugins":
                 plugins_info = []
                 if os.path.exists(PLUGINS_DIR):
@@ -315,7 +315,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                             try:
                                 with open(manifest_file, 'r', encoding='utf-8') as mf:
                                     info = json.load(mf)
-                                    info['plugin_id'] = p # 强行把物理文件夹名注入进去，作为唯一 ID
+                                    info['plugin_id'] = p # 将插件目录名作为唯一 ID
                                     normalize_manifest_security(info, p)
                                     info['plugin_ui_token'] = plugin_security_manager.plugin_ui_token(p)
                                     plugins_info.append(info)
@@ -323,7 +323,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                                 print(f" [VPM] 解析插件 {p} 契约失败: {e}")
                                 
                 await websocket.send_json({"type": "plugins_list", "content": plugins_info})
-            # VPM 物理卸载指令
+            # VPM 插件卸载指令
             elif cmd_type == "uninstall_plugin":
                 plugin_id = request.get("plugin_id")
                 safe_id = os.path.basename(plugin_id) 
@@ -332,8 +332,8 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 
                 if os.path.exists(plugin_path):
                     try:
-                        # 0. 在物理销毁前，由主引擎接管并强制注销该插件的所有向量记忆！
-                        # 绝对安全：不经过 HTTP API，直接调用主系统的内存函数
+                        # 0. 卸载前由主系统清理该插件的向量记录。
+                        # 不经过 HTTP API，直接调用主系统的内存函数。
                         knowledge_dir = os.path.join(plugin_path, "knowledge")
                         if os.path.exists(knowledge_dir):
                             for md_file in os.listdir(knowledge_dir):
@@ -343,12 +343,12 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                                         "command": "RAG_UPSERT",
                                         "source_file": filepath,
                                         "hash": "uninstall_purge",
-                                        "payload": [] # 空载荷触发彻底删除
+                                        "payload": [] # 空载荷触发删除该来源的向量记录
                                     }
                                     vault_os.receive_knowledge_payload(purge_payload)
-                            print(f" [系统屠魔] 插件 [{safe_id}] 的所有孤儿向量记忆已被主系统强行注销！")
+                            print(f" [VPM 卸载] 插件 [{safe_id}] 的关联向量记录已清理。")
 
-                        # 1. 尝试调用插件专属的自毁钩子 (Lifecycle Hook)
+                        # 1. 尝试调用插件专属的卸载钩子 (Lifecycle Hook)
                         if os.path.exists(api_file):
                             import importlib.util
                             spec = importlib.util.spec_from_file_location(f"vpm.temp.{safe_id}", api_file)
@@ -358,13 +358,13 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                             if hasattr(plugin_module, "uninstall_hook"):
                                 plugin_module.uninstall_hook(engine)
                         
-                        # 2. 主引擎执行最终的物理抹杀：连根拔起插件文件夹
+                        # 2. 删除插件目录。
                         shutil.rmtree(plugin_path) 
                         
                         await websocket.send_json({"type": "plugin_uninstalled_success", "plugin_id": safe_id})
-                        await websocket.send_json({"type": "system_toast", "content": f" 插件 [{safe_id}] 已彻底卸载！"})
+                        await websocket.send_json({"type": "system_toast", "content": f" 插件 [{safe_id}] 已卸载。"})
                     except Exception as e:
-                        await websocket.send_json({"type": "system_toast", "content": f" 卸载崩溃: {e}"})
+                        await websocket.send_json({"type": "system_toast", "content": f" 卸载失败: {e}"})
             # === [通道 B：中等耗时的后台 IO 任务] ===
             elif cmd_type == "memory_surgery":
                 # 交给线程池处理，避免卡死当前通信
@@ -450,7 +450,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
         print(" [断开连接] 前端 UI 已下线/关闭。")
         consumer_task.cancel() # 安全清理消费者协程
     except Exception as e:
-        print(f" [网关异常] 通信循环崩溃: {str(e)}")
+        print(f" [网关异常] 通信循环异常: {str(e)}")
         consumer_task.cancel()
 # 2. 动态扫描并挂载第三方后端 API
 def mount_vpm_plugins():

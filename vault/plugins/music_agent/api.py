@@ -136,7 +136,7 @@ async def add_music_track(
             session.add(new_track)
             session.commit()
 
-        # --- 4. 生成底层 Markdown 资产 ---
+        # --- 4. 生成 Markdown 资产 ---
         safe_title = "".join(c for c in title if c.isalnum() or c in " -_")
         file_name = f"music_{timestamp}_{safe_title}.md"
         file_path = os.path.join(KNOWLEDGE_DIR, file_name)
@@ -150,7 +150,7 @@ cover_url: "{cover_url_db}"
 created_at: {timestamp}
 ---
 # {title}
-*(Vault OS - 情绪打碟机 V2)*
+*(Vault OS - Music Agent V2)*
 
 ## 原曲歌词 (Lyrics)
 {lyrics if lyrics else '暂无歌词'}
@@ -179,7 +179,7 @@ async def get_music_list():
 
 @router.delete("/delete")
 async def delete_music_track(url: str):
-    """真正的物理抹除：SQLite + 本地音频 + 本地封面 + Markdown记忆 + RAG 向量擦除"""
+    """删除曲目资产：SQLite + 本地音频 + 本地封面 + Markdown 记录 + RAG 向量记录"""
     if not engine: raise HTTPException(status_code=500, detail="引擎未初始化")
     import requests # 确保发通知能用到
     
@@ -188,23 +188,23 @@ async def delete_music_track(url: str):
         if not track:
             raise HTTPException(status_code=404, detail="未找到该曲目")
 
-        # --- 1. 碎纸机：销毁本地封面图 ---
+        # --- 1. 删除本地封面图 ---
         if track.cover_url:
             cover_filename = track.cover_url.split("/")[-1]
             cover_path = os.path.join(COVERS_DIR, cover_filename)
             if os.path.exists(cover_path):
                 os.remove(cover_path)
-                print(f"🗑️ [碎纸机] 封面已销毁: {cover_filename}")
+                print(f" [Music Agent] 封面已删除: {cover_filename}")
 
-        # --- 2. 碎纸机：销毁本地音频文件 ---
+        # --- 2. 删除本地音频文件 ---
         if track.url:
             audio_filename = track.url.split("/")[-1]
             audio_path = os.path.join(AUDIO_DIR, audio_filename)
             if os.path.exists(audio_path):
                 os.remove(audio_path)
-                print(f"🗑️ [碎纸机] 音轨已销毁: {audio_filename}")
+                print(f" [Music Agent] 音轨已删除: {audio_filename}")
 
-        # --- 3. 记忆切除：销毁 Markdown 沙盒资产，并通知主脑遗忘 ---
+        # --- 3. 删除 Markdown 资产，并通知主系统清理向量记录 ---
         if os.path.exists(KNOWLEDGE_DIR):
             for filename in os.listdir(KNOWLEDGE_DIR):
                 if filename.endswith(".md"):
@@ -212,12 +212,12 @@ async def delete_music_track(url: str):
                     with open(filepath, "r", encoding="utf-8") as f:
                         content = f.read()
                         
-                    # 只要 Markdown 文件的 frontmatter 里包含这个唯一主键 URL，就是它！
+                    # 只要 Markdown 文件的 frontmatter 里包含这个唯一主键 URL，就是它。
                     if track.url in content:
                         os.remove(filepath)
-                        print(f"🗑️ [记忆切除] 物理知识库资产已抹除: {filename}")
+                        print(f" [Music Agent] 知识库资产已删除: {filename}")
                         
-                        #  核心新增：向主引擎 RAG 网关发送“遗忘指令”
+                        # 向主系统 RAG 网关请求删除该来源的向量记录。
                         try:
                             token_path = os.path.join(VAULT_ROOT, ".run_token")
                             security_token = ""
@@ -384,19 +384,19 @@ def agent_analyze_lyrics(url: str, lyrics: str, md_file_path: str):
                 
         rag_url = f"http://127.0.0.1:{actual_port}/api/rag/ingest"
                 
-        # 通过 HTTP 向主系统的 RAG 神经总线发起注射！
+        # 通过 HTTP 向主系统的 RAG 网关提交更新。
         headers = {"Authorization": f"Bearer {security_token}"}
         try:
             resp = requests.post(rag_url, json=rag_payload, headers=headers, timeout=10)
             if resp.status_code == 200:
-                print("✅ [Music Agent] 记忆碎片已成功上交系统 RAG 向量库！管家现在可以搜到它了！")
+                print(" [Music Agent] 知识切片已写入系统 RAG 向量库。")
             else:
-                print(f"⚠️ [Music Agent] 记忆上交被主系统拒收: {resp.text}")
+                print(f" [Music Agent] RAG 更新被主系统拒绝: {resp.text}")
         except Exception as e:
-            print(f"🚨 [Music Agent] 无法连接主引擎 RAG 网关 (可能后端尚未重启): {e}")
+            print(f" [Music Agent] 无法连接主系统 RAG 网关 (可能后端尚未重启): {e}")
 
     except Exception as e:
-        print(f"🚨 [Music Agent] 后台解析大崩盘: {e}")
+        print(f" [Music Agent] 后台解析失败: {e}")
 
 @router.post("/update")
 async def update_music_track(
@@ -456,11 +456,11 @@ async def music_plugin_executor(payload: dict):
             valid_tracks = [t for t in all_tracks if "【失效】" not in t.title]
             
             if not valid_tracks:
-                return "本地曲库为空，请Boss先去管理后台录入资产。"
+                return "本地曲库为空，请先去管理后台录入资产。"
 
             selection = []
             
-            # 诚实裁决逻辑：如果有明确关键词，找不到就必须报错！
+            # 如果有明确关键词，找不到就必须如实返回缺失。
             if keywords and keywords.strip():
                 k = keywords.lower()
                 matched = []
@@ -468,14 +468,14 @@ async def music_plugin_executor(payload: dict):
                     corpus = f"{t.title} {t.artist} {t.tags_raw} {t.analysis} {t.lyrics}".lower()
                     if k in corpus: matched.append(t)
                 
-                # 核心拦截：找不到绝不顶包，如实上报！
+                # 找不到时如实上报，不补编曲目。
                 if not matched:
-                    return f"【系统红色警报：禁止产生幻觉！】本地数字资产库中没有任何与 '{keywords}' 相关的曲目。请立即向 Boss 汇报本地缺失此类型歌曲，并立即结束回答！绝对、永远禁止擅自编造歌曲名或推荐互联网上的曲目！"
+                    return f"【本地曲库检索结果】：未找到与 '{keywords}' 相关的曲目。请向用户说明本地缺失此类型歌曲，不要编造歌曲名或推荐互联网上的曲目。"
                 
                 selection = random.sample(matched, min(len(matched), 10))
                 
             else:
-                # 只有当 Boss 没提具体要求（比如只说了“随便放首歌”），才允许全库盲盒抽取
+                # 只有当用户没提具体要求（比如只说了“随便放首歌”），才允许从全库随机抽取。
                 selection = random.sample(valid_tracks, min(len(valid_tracks), 10))
             
             # --- 下面发布事件的代码保持不变 ---
@@ -489,7 +489,7 @@ async def music_plugin_executor(payload: dict):
             })
             
             songs_str = ", ".join([f"《{t.title}》" for t in selection])
-            return f"已为你生成临时歌单：{songs_str}，并在右侧面板开始打碟。"
+            return f"已为你生成临时歌单：{songs_str}，并在右侧面板开始播放。"
 
     return f"Music Agent 暂不支持指令: {func_name}"
 @router.get("/export")
@@ -534,14 +534,14 @@ async def export_music_assets():
 
 # VPM 生命周期钩子：当主引擎准备卸载本插件时，会自动调用此函数
 def uninstall_hook(app_engine):
-    """插件专属的焦土政策：清理自己留在全局的垃圾"""
+    """插件卸载钩子：清理自己拥有的数据库对象"""
     from sqlmodel import text, Session
     import os
     import shutil
     
-    print("🧹 [Music Agent] 正在执行自毁程序...")
+    print(" [Music Agent] 正在执行卸载清理...")
     
-    # 1. 销毁自己的物理表
+    # 1. 清理自己的数据库表
     try:
         with Session(app_engine) as session:
             session.exec(text("DROP TABLE IF EXISTS vpm_plugin_music_tracks;"))
