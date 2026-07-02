@@ -17,11 +17,11 @@ class ToolExecutor:
         self.session_id = session_id
 
     def execute(self, tool_call):
-        """融合版核心执行引擎：支持原生内置函数 + 外部 VPM 插件"""
+        """核心执行引擎：支持原生内置函数 + 外部 VPM 插件"""
         func_name = tool_call.function.name
         
         try:
-            # 1. 优雅解析：直接拿原生协议里的 JSON 参数，告别恶心的正则清洗
+            # 1. 直接读取原生协议里的 JSON 参数，避免额外的字符串清洗。
             args = json.loads(tool_call.function.arguments)
         except json.JSONDecodeError:
             return "[SYSTEM_ERROR]: 大模型生成的参数 JSON 解析失败。"
@@ -49,7 +49,7 @@ class ToolExecutor:
             target = args.get("target_panel")
             component = args.get("target_component", "")
             state = args.get("state")
-            print(f"🪄 [UI 魔法] 大模型主动施法：将 {target} 切换至 {state} 模式")
+            print(f" [UI 控制] 请求将 {target} 切换至 {state} 模式")
             # 使用事件总线，将这个纯粹的 UI 指令通过 WebSocket 推给前端
             # 必须用 asyncio.run 或创建 task 来执行异步推送
             try:
@@ -60,11 +60,11 @@ class ToolExecutor:
                     "target_component": component,
                     "state": state
                 }))
-                print(f"✅ [UI 魔法] 成功通过 WebSocket 下发 {state} 指令！")
+                print(f" [UI 控制] 已通过 WebSocket 下发 {state} 指令。")
             except RuntimeError as e:
-                print(f"🚨 [UI 魔法崩溃]: 跨线程下发异常 -> {e}")
-            # 告诉大模型：你已经成功改变了现实，继续你的表演
-            return f"[SYSTEM_SUCCESS]: 已经成功将前端 {target} 面板切换为 {state} 模式。【系统最高指令】：你的任务已完美完成！前端已响应。现在，请你直接回复并且只能回复这四个字：'已为您开启'。多一个字、多一句话解释、或输出任何链接，都会导致系统崩溃重启！绝对闭嘴！"
+                print(f" [UI 控制] 跨线程下发异常: {e}")
+            # 告诉模型：UI 指令已执行，回复应简短确认，不要再补充外部内容。
+            return f"[SYSTEM_SUCCESS]: 前端 {target} 面板已切换为 {state} 模式。【结构化回复约束】：请仅简要确认界面已开启，不要输出链接或额外解释。"
             
         # 通道 B：执行外部 VPM 插件生态 (Subprocess / HTTP)
         tool_manifest = next((t for t in self.registry.tools if t.get("function", {}).get("name") == func_name), None)
@@ -74,13 +74,13 @@ class ToolExecutor:
 
         execution_config = tool_manifest.get("execution")
         if not execution_config:
-            return f"[SYSTEM_ERROR]: 外部插件 '{func_name}' 缺少 VPM execution 物理执行配置"
+            return f"[SYSTEM_ERROR]: 外部插件 '{func_name}' 缺少 VPM execution 执行配置"
 
         auth = plugin_security_manager.authorize_tool_call(tool_manifest, args, self.session_id)
         if not auth.get("allowed"):
             return auth.get("message", "[PLUGIN_SECURITY_BLOCKED]: Plugin call was blocked by Vault OS security policy.")
 
-        print(f"\n⚙️  [调度器] 正在拉起外部 Agent: {func_name} ...")
+        print(f"\n [调度器] 正在调用外部 Agent: {func_name} ...")
         
         # 模式 B1：本地子进程 (Subprocess)
         if execution_config["type"] == "subprocess":
@@ -95,7 +95,7 @@ class ToolExecutor:
                 else:
                     return f"[SYSTEM_ERROR]: 子进程抛出异常 (Exit Code {result.returncode})。\n错误日志: {redact_text(result.stderr.strip())}"
             except subprocess.TimeoutExpired:
-                return f"[SYSTEM_ERROR]: 本地脚本执行超时 (>60秒)，系统已强制将其 kill。"
+                return f"[SYSTEM_ERROR]: 本地脚本执行超时 (>60秒)，系统已终止该进程。"
                 
         # 模式 B2：本地微服务或云端 API (HTTP)
         elif execution_config["type"] == "http":
@@ -143,12 +143,12 @@ class ToolExecutor:
                 resp.raise_for_status() 
                 return plugin_security_manager.wrap_untrusted_result(tool_manifest, resp.text)
             except requests.exceptions.Timeout:
-                return "[SYSTEM_ERROR]: 请求 Agent 超时 (>15秒)。可能原因：对方服务器宕机或网络阻塞。"
+                return "[SYSTEM_ERROR]: 请求 Agent 超时 (>15秒)。可能原因：对方服务未响应或网络阻塞。"
             except requests.exceptions.ConnectionError:
                 return f"[SYSTEM_ERROR]: 无法连接到外部 Agent ({redact_text(endpoint)})。可能原因：服务未启动或网络不通。"
             except requests.exceptions.HTTPError as err:
                 return f"[SYSTEM_ERROR]: 第三方 Agent 拒绝服务。HTTP 状态码: {err.response.status_code}。"
-            except Exception as e: # 扩大异常捕获，防止 URL 解析错误导致线程崩溃
+            except Exception as e: # 扩大异常捕获，防止 URL 解析错误导致线程异常退出
                 return f"[SYSTEM_ERROR]: 请求外部 Agent 失败 ({redact_text(endpoint)})。错误信息: {redact_text(str(e))}"
         else:
             return f"[SYSTEM_ERROR]: 不支持的执行模式 '{execution_config['type']}'"
@@ -175,11 +175,11 @@ class ToolExecutor:
         print(f"\n[网络搜索] 触发工具, 搜索词: '{query}'")
         query = str(query or "").strip()
         if not query:
-            return "[搜索工具失败]: 查询词为空。请直接告知 Boss 搜索工具没有收到可执行的查询词。"
+            return "[搜索工具失败]: 查询词为空。请直接告知用户搜索工具没有收到可执行的查询词。"
         try:
             from ddgs import DDGS
         except Exception as e:
-            return f"[搜索工具失败]: 无法加载 ddgs 依赖: {e}。请直接告知 Boss 搜索工具不可用，绝对不要使用训练数据补编最新信息。"
+            return f"[搜索工具失败]: 无法加载 ddgs 依赖: {e}。请直接告知用户搜索工具不可用，不要使用训练数据补充最新信息。"
 
         config = self._web_search_config()
         attempts = self._web_search_attempts(config)
@@ -206,10 +206,10 @@ class ToolExecutor:
             details = "; ".join(errors[:4])
             if len(errors) > 4:
                 details += f"; 另有 {len(errors) - 4} 次失败"
-            return f"[搜索工具失败]: 所有 DDGS 搜索通道都失败。失败摘要: {details}。请直接告知 Boss 搜索工具发生故障，绝对不要使用训练数据补编最新信息。"
+            return f"[搜索工具失败]: 所有 DDGS 搜索通道都失败。失败摘要: {details}。请直接告知用户搜索工具发生故障，不要使用训练数据补充最新信息。"
 
         searched = "、".join(empty_attempts) if empty_attempts else "全部通道"
-        return f"【搜索工具返回结果】：空。已尝试 {searched}，网络上未找到相关信息。警告：请如实告知 Boss 没有搜到最新信息，绝对禁止使用你自己的训练数据进行编造！"
+        return f"【搜索工具返回结果】：空。已尝试 {searched}，网络上未找到相关信息。请如实告知用户没有搜到最新信息，不要使用训练数据编造结果。"
 
     def _web_search_config(self):
         raw_config = self.config_getter() or {}

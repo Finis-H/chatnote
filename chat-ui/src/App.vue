@@ -131,7 +131,11 @@ onUnmounted(async () => {
           <VpmCenterView v-if="activeView === 'vpm_center'" />
         </div>
 
-        <div class="fixed-console" :class="{ 'error-shake': inputError }">
+        <div
+          v-if="!['settings', 'profile_import', 'vpm_center'].includes(activeView)"
+          class="fixed-console"
+          :class="{ 'error-shake': inputError }"
+        >
           <div class="context-pill" v-if="activeView==='note_detail'">📍 讨论中: {{ currentNote.title }}</div>
           <div class="command-rail">
             <span class="prompt-icon" aria-hidden="true">❯</span>
@@ -159,12 +163,12 @@ onUnmounted(async () => {
         <div class="modal-icon">⚠️</div>
         <h3 class="modal-title">系统删除确认</h3>
         <p class="modal-desc">
-          确定要彻底销毁档案 <span class="highlight-text">《{{ deleteModal.note?.title }}》</span> 吗？<br>
-          <span class="warning-text">物理文件与神经对话记录将被永久抹除，不可逆转。</span>
+          确定要删除档案 <span class="highlight-text">《{{ deleteModal.note?.title }}》</span> 吗？<br>
+          <span class="warning-text">相关本地文件与对话记录将被删除，此操作不可撤销。</span>
         </p>
         <div class="modal-actions">
-          <button class="btn-cancel" @click="cancelDelete">取消指令</button>
-          <button class="btn-confirm" @click="confirmDelete">执行销毁</button>
+          <button class="btn-cancel" @click="cancelDelete">取消</button>
+          <button class="btn-confirm" @click="confirmDelete">确认删除</button>
         </div>
       </div>
     </div>

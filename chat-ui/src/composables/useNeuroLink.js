@@ -424,7 +424,7 @@ export function useNeuroLink() {
       
       ws.onopen = () => {
         setConnectionState('connected');
-        console.log("🟢 [Vault OS] 神经链路已接通！");
+        console.log("[Vault OS] WebSocket 已连接。");
         inputError.value = false;
         ws.send(JSON.stringify({ type: "get_config" }));
         ws.send(JSON.stringify({ type: "fetch_plugins" }));
@@ -554,7 +554,7 @@ export function useNeuroLink() {
           showToast(result.ok ? `✅ ${result.message || '系统核心已热重载！'}` : `⚠️ ${result.message || '配置体检未通过，已保留当前配置。'}${failedSuffix}`);
           if (result.ok) switchView('chat');
         }
-        else if (data.type === 'system_toast') showToast("🩺 [管家汇报] " + data.content);
+        else if (data.type === 'system_toast') showToast("[系统通知] " + data.content);
         else if (data.type === 'profile_import_state') {
           applyProfileImportState(data.content || {});
         }
@@ -611,7 +611,7 @@ export function useNeuroLink() {
       
       ws.onclose = () => {
         if (isAppDestroyed) return;
-        console.warn("🔴 [Vault OS] 链路断开，3秒后自愈重连...");
+        console.warn("[Vault OS] 连接断开，3 秒后自动重连...");
         ws = null;
         setConnectionState('reconnecting');
         setTimeout(connectWebSocket, 3000);
@@ -648,7 +648,7 @@ export function useNeuroLink() {
     if (!userInput.value || !userInput.value.trim()) return triggerErrorShake();
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       triggerErrorShake();
-      const errorMsg = { role: 'ai', content: '🚨 [系统报错] 无法连接到 Python 大脑！' };
+      const errorMsg = { role: 'ai', content: '[系统报错] 无法连接到 Python 后端。' };
       isTempSession.value ? tempMessages.value.push(errorMsg) : (activeView.value === 'note_detail' ? noteThreads.value[currentNote.value.id].push(errorMsg) : globalMessages.value.push(errorMsg));
       return;
     }
@@ -682,7 +682,7 @@ export function useNeuroLink() {
       tempMessages.value.push({ role: 'user', content: msg });
     } else if (activeView.value === 'note_detail') {
       noteThreads.value[currentNote.value.id].push({ role: 'user', content: msg });
-      finalPayload= `[当前操作界面：笔记阅读模式]\n参考文章：《${currentNote.value.title}》\n部分内容：${currentNote.value.content.substring(0, 1500)}\n\n【系统提示】：如果BOSS的问题与文章相关，请优先基于文章回答；如果问题是通用询问或查询最新资讯，请直接忽略文章，务必调用 web_search 工具获取最新信息。\n\nBOSS的指令：${msg}`;
+      finalPayload= `[当前操作界面：笔记阅读模式]\n参考文章：《${currentNote.value.title}》\n部分内容：${currentNote.value.content.substring(0, 1500)}\n\n【系统提示】：如果用户的问题与文章相关，请优先基于文章回答；如果问题是通用询问或查询最新资讯，请直接忽略文章，务必调用 web_search 工具获取最新信息。\n\n用户指令：${msg}`;
     } else {
       globalMessages.value.push({ role: 'user', content: msg });
     }

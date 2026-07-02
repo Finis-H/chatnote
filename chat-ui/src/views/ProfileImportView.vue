@@ -34,7 +34,7 @@ function handleFileChange(e) {
   <div class="scroll-container">
     <h2 class="view-title">🌱 个性偏好初始化</h2>
     <div class="settings-panel">
-      <p class="memory-subtitle">上传一份包含你个人偏好、编程习惯或自我介绍的文档，管家会先整理成可确认版本，再进入记忆流程。</p>
+      <p class="memory-subtitle">上传一份包含你个人偏好、编程习惯或自我介绍的文档，系统会先整理成可确认版本，再进入记忆流程。</p>
 
       <div v-if="profileImportStage === 'locked'" class="locked-panel">
         <div class="panel-title">上一份导入仍在等待记忆结算</div>

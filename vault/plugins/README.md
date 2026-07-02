@@ -273,15 +273,15 @@ vault/plugins/{plugin_id}/ui/Manager.vue
 await fetch(`${SystemConfig.API_BASE}/api/plugins/your_agent/list`);
 ```
 
-## 五、RAG：插件切片，管家托管向量
+## 五、RAG：插件切片，主系统托管向量
 
 VPM v2 的 RAG 边界如下：
 
 - 插件负责自己的领域理解、材料整理和切片策略。
-- 插件提交给管家的内容应当已经切好，每个切片包含 `chunk_text` 和 `metadata`。
-- 管家只负责向量层面的写入、更新、删除，不替插件设计切片方式。
-- 插件不得绕过管家改动本地向量存储。
-- 管家只接受归属于该插件的来源，并且只影响该插件名下、该插件来源路径下的向量内容。
+- 插件提交给主系统的内容应当已经切好，每个切片包含 `chunk_text` 和 `metadata`。
+- 主系统只负责向量层面的写入、更新、删除，不替插件设计切片方式。
+- 插件不得绕过主系统改动本地向量存储。
+- 主系统只接受归属于该插件的来源，并且只影响该插件名下、该插件来源路径下的向量内容。
 
 建议插件把可追踪来源文件放在：
 
@@ -289,7 +289,7 @@ VPM v2 的 RAG 边界如下：
 vault/plugins/{plugin_id}/knowledge/
 ```
 
-向管家提交的逻辑载荷建议保持以下形状：
+向主系统提交的逻辑载荷建议保持以下形状：
 
 ```json
 {
@@ -314,8 +314,8 @@ vault/plugins/{plugin_id}/knowledge/
 - `source_file` 或来源标识必须位于或指向当前插件私有目录。
 - `metadata.plugin_id` 应等于插件目录名。
 - `hash` 应能表达本次内容版本，便于更新时覆盖旧向量。
-- 空 `payload` 表示请求管家删除该来源对应的向量记录。
-- 插件卸载时，向量注销由管家按 `plugin_id` 和插件私有来源路径执行。
+- 空 `payload` 表示请求主系统删除该来源对应的向量记录。
+- 插件卸载时，向量清理由主系统按 `plugin_id` 和插件私有来源路径执行。
 
 ## 六、卸载与安全边界
 
@@ -326,7 +326,7 @@ vault/plugins/{plugin_id}/knowledge/
 - 不允许批量删除目录。
 - 不允许删除或改写其他插件目录。
 - 不允许操作主系统核心表、聊天历史、画像记忆、全局配置和其他共享运行时文件。
-- 插件产生的 RAG 向量由管家根据插件归属清理，插件不要自行处理底层向量存储。
+- 插件产生的 RAG 向量由主系统根据插件归属清理，插件不要自行处理底层向量存储。
 
 推荐命名规则：
 
@@ -357,7 +357,7 @@ Vault OS 对第三方插件采用默认拒绝策略。除主系统硬编码 allo
 - `native_backend`：使用 `/api/plugins/{plugin_id}/...` 后端路由，高风险；第三方插件默认不会被主进程 import。
 - `subprocess`：执行本地子进程，高风险。
 - `rag_write`：向主系统提交插件私有 RAG 切片。
-- `memory_read` / `profile_read`：读取 Boss 记忆或画像，高敏感。
+- `memory_read` / `profile_read`：读取用户记忆或画像，高敏感。
 - `contact_info` / `location` / `host_info` / `api_key` / `system_config`：涉及电话、邮箱、地址、主机地址、API Key 或系统配置，高敏感。
 - `ui_commands`：请求主界面打开、切换或控制插件 UI。
 
@@ -380,5 +380,5 @@ Vault OS 对第三方插件采用默认拒绝策略。除主系统硬编码 allo
 - 如果提供业务面板，后端消息包含正确的 `target_panel` 和 `target_component`。
 - 所有插件资源都位于 `vault/plugins/{plugin_id}/` 内。
 - 数据库表名带有 `vpm_plugin_{plugin_id}_` 前缀。
-- RAG 内容由插件自行切片，但向量写入、更新、删除交给管家。
+- RAG 内容由插件自行切片，但向量写入、更新、删除交给主系统。
 - 卸载钩子不越权、不处理其他插件或主系统数据。

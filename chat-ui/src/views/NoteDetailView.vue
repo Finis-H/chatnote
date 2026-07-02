@@ -20,10 +20,10 @@ watch([noteThreads, isThinking], () => nextTick(scrollViewport), { deep: true })
     <div class="thread-separator">讨论线程 (CONTEXT_THREAD)</div>
     <div class="thread-chat">
       <div v-for="(m, i) in noteThreads[currentNote.id]" :key="i" :class="['bubble', m.role]">
-        <span class="role-tag">{{ m.role === 'user' ? 'BOSS' : 'AI' }}</span>
+        <span class="role-tag">{{ m.role === 'user' ? 'USER' : 'AI' }}</span>
         <CyberMarkdown :text="m.content" />
       </div>
-      <div v-if="isThinking" class="thinking-cursor">🧠 大脑全速运转中...</div>
+      <div v-if="isThinking" class="thinking-cursor">正在生成回复...</div>
     </div>
   </div>
 </template>

@@ -30,7 +30,7 @@ function displayTrait(mem) {
   if (!trait || !subject) return trait;
   if (trait.startsWith(subject)) return trait;
   if (subject !== 'Boss') return `${subject}${trait}`;
-  return `Boss ${trait}`;
+  return `用户 ${trait}`;
 }
 </script>
 
@@ -38,7 +38,7 @@ function displayTrait(mem) {
   <div class="scroll-container">
     <div class="memory-header">
       <h2 class="view-title">🧠 记忆事件同步</h2>
-      <p class="memory-subtitle">在此处理低置信度、关系变更、手术指令和冲突候选。超时 3 天的待审项将自动同化。</p>
+      <p class="memory-subtitle">在此处理低置信度、关系变更、手动记忆更新和冲突候选。超时 3 天的待审项将自动合并。</p>
     </div>
     <div class="search-console">
       <div class="filter-capsules">
@@ -49,20 +49,20 @@ function displayTrait(mem) {
         <button :class="{ active: memoryFilter === 'merged' }" @click="memoryFilter = 'merged'">✨ 历史档案</button>
       </div>
     </div>
-    <div v-if="pendingMemory.length === 0" class="empty-state">当前神经链路纯净，无待决记忆碎片。</div>
+    <div v-if="pendingMemory.length === 0" class="empty-state">当前没有待审记忆事件。</div>
     <div class="memory-grid" v-else>
       <div v-for="mem in displayMemory" :key="mem.id" class="memory-card" :class="mem.status === 'PENDING' ? 'card-warning' : 'card-success'">
         <div class="card-header">
           <span class="mem-tag">{{ mem.category.toUpperCase() }}</span>
-          <span class="mem-status" v-if="mem.status === 'MERGED'">✨ 已同化生效</span>
-          <span class="mem-status" v-if="mem.status === 'REJECTED'">❌ 已驳回抹除</span>
-          <span class="mem-status" v-if="mem.status === 'AUTO_OVERWRITTEN'">⏰ 超时强行同化</span>
+          <span class="mem-status" v-if="mem.status === 'MERGED'">✨ 已合并生效</span>
+          <span class="mem-status" v-if="mem.status === 'REJECTED'">❌ 已驳回</span>
+          <span class="mem-status" v-if="mem.status === 'AUTO_OVERWRITTEN'">⏰ 超时自动合并</span>
           <span class="mem-status blink" v-if="mem.status === 'PENDING'">⚠️ 事件待审</span>
         </div>
         <div class="card-body">
           <div v-if="mem.type === 'CONFLICT'" class="conflict-zone">
             <div class="old-trait"><del>{{ mem.old_trait }}</del></div>
-            <div class="arrow">↓ 强行覆写为 ↓</div>
+            <div class="arrow">↓ 更新为 ↓</div>
           </div>
           <div class="new-trait">{{ displayTrait(mem) }}</div>
         </div>

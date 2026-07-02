@@ -2,7 +2,7 @@
   "name": "music_agent",
   "version": "2.0.0",
   "author": "Vault Core",
-  "description": "Vault OS 官方基础组件。提供沉浸式的赛博朋克音乐播放与本地资产录入功能。",
+  "description": "Vault OS 官方基础组件。提供沉浸式音乐播放与本地资产录入功能。",
   "tags": ["核心组件", "多媒体"],
   "security": {
     "trust": "first_party",
@@ -12,13 +12,13 @@
   "type": "function",
   "function": {
     "name": "play_music_playlist",
-    "description": "音乐/打碟机控制中心。当 Boss 想要听歌、播放音乐、打碟，或者询问关于歌曲的意境时，调用此工具。它会在前端自动弹出沉浸式播放器。",
+    "description": "音乐播放控制中心。当用户想要听歌、播放音乐，或者询问关于歌曲的意境时，调用此工具。它会在前端自动弹出沉浸式播放器。",
     "parameters": {
       "type": "object",
       "properties": {
         "keywords": {
           "type": "string",
-          "description": "Boss 提到的歌曲名、歌手或情感关键词（如果没有则传空字符串）"
+          "description": "用户提到的歌曲名、歌手或情感关键词（如果没有则传空字符串）"
         }
       }
     }
