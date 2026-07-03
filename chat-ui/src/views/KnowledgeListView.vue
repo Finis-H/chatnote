@@ -1,11 +1,18 @@
 <script setup>
 import { computed } from 'vue';
+import PageFrame from '../components/PageFrame.vue';
+import SegmentedControl from '../components/SegmentedControl.vue';
 import { newsList, favoritesList, searchQuery, searchMode, deleteModal, useNeuroLink } from '../composables/useNeuroLink';
 
 const props = defineProps({ type: String }); // 'news' or 'favorites'
 const { openNote } = useNeuroLink();
 
 const title = computed(() => props.type === 'news' ? '最新摄入消息' : '⭐ 订阅与收藏');
+const searchModeOptions = [
+  { label: '全局', value: 'all' },
+  { label: '标题', value: 'title' },
+  { label: '标签', value: 'keyword' }
+];
 
 const currentList = computed(() => {
   const baseList = props.type === 'news' ? newsList.value : favoritesList.value;
@@ -28,14 +35,9 @@ function requestDelete(event, note) {
 </script>
 
 <template>
-  <div class="scroll-container card-grid">
-    <h2 class="view-title">{{ title }}</h2>
+  <PageFrame :title="title">
     <div class="search-console">
-      <div class="filter-capsules">
-        <button :class="{ active: searchMode === 'all' }" @click="searchMode = 'all'">全局</button>
-        <button :class="{ active: searchMode === 'title' }" @click="searchMode = 'title'">标题</button>
-        <button :class="{ active: searchMode === 'keyword' }" @click="searchMode = 'keyword'">标签</button>
-      </div>
+      <SegmentedControl v-model="searchMode" :options="searchModeOptions" />
       <input class="search-input" v-model="searchQuery" placeholder="输入关键字进行毫秒级过滤..." />
     </div>
     <div class="news-card" v-for="n in currentList" :key="n.id" @click="openNote(n)">
@@ -50,18 +52,11 @@ function requestDelete(event, note) {
       </div>
       <div class="card-footer">点击阅读并讨论 →</div>
     </div>
-  </div>
+  </PageFrame>
 </template>
 
 <style scoped>
-.scroll-container { padding: var(--space-3xl); display: flex; flex-direction: column; gap: var(--space-xl); height: 100%; overflow-y: auto; }
-.scroll-container::-webkit-scrollbar { width: 6px; }
-.scroll-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-xs); }
-.view-title { color: var(--text-primary); font-size: 18px; font-weight: normal; margin-bottom: var(--space-sm); }
-.search-console { display: flex; gap: var(--space-lg); margin-bottom: var(--space-2xl); align-items: center; }
-.filter-capsules { display: flex; background: var(--bg-hover); border-radius: var(--radius-pill); padding: var(--space-2xs); }
-.filter-capsules button { background: transparent; border: none; color: var(--text-muted); padding: 6px 16px; border-radius: var(--radius-pill); cursor: pointer; font-size: 12px; transition: background var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard); font-family: var(--font-mono); }
-.filter-capsules button.active { background: var(--accent); color: var(--text-inverse); font-weight: bold; }
+.search-console { display: flex; gap: var(--space-lg); margin-top: var(--space-sm); margin-bottom: var(--space-2xl); align-items: center; }
 .search-input { flex: 1; background: var(--bg-console); border: 1px solid var(--border-strong); color: var(--text-primary); padding: 10px var(--space-lg); border-radius: var(--radius-sm); font-size: 14px; }
 .search-input:focus { border-color: var(--accent-border); box-shadow: var(--shadow-glow-soft); }
 .news-card { background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-xl); cursor: pointer; transition: transform var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard); }

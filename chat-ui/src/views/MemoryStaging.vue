@@ -1,6 +1,14 @@
 <script setup>
 import { computed } from 'vue';
+import PageFrame from '../components/PageFrame.vue';
+import SegmentedControl from '../components/SegmentedControl.vue';
 import { pendingMemory, pendingCount, memoryFilter, resolveMemoryConflict } from '../composables/useNeuroLink';
+
+const memoryFilterOptions = computed(() => [
+  { label: '全局视野', value: 'all' },
+  { label: `⚠️ 待审事件 (${pendingCount.value})`, value: 'pending' },
+  { label: '✨ 历史档案', value: 'merged' }
+]);
 
 const displayMemory = computed(() => {
   let list = [...pendingMemory.value];
@@ -35,19 +43,12 @@ function displayTrait(mem) {
 </script>
 
 <template>
-  <div class="scroll-container">
-    <div class="memory-header">
-      <h2 class="view-title">🧠 记忆事件同步</h2>
-      <p class="memory-subtitle">在此处理低置信度、关系变更、手动记忆更新和冲突候选。超时 3 天的待审项将自动合并。</p>
-    </div>
+  <PageFrame
+    title="🧠 记忆事件同步"
+    subtitle="在此处理低置信度、关系变更、手动记忆更新和冲突候选。超时 3 天的待审项将自动合并。"
+  >
     <div class="search-console">
-      <div class="filter-capsules">
-        <button :class="{ active: memoryFilter === 'all' }" @click="memoryFilter = 'all'">全局视野</button>
-        <button :class="{ active: memoryFilter === 'pending'}" @click="memoryFilter = 'pending'">
-          ⚠️ 待审事件 ({{ pendingCount }})
-        </button>
-        <button :class="{ active: memoryFilter === 'merged' }" @click="memoryFilter = 'merged'">✨ 历史档案</button>
-      </div>
+      <SegmentedControl v-model="memoryFilter" :options="memoryFilterOptions" />
     </div>
     <div v-if="pendingMemory.length === 0" class="empty-state">当前没有待审记忆事件。</div>
     <div class="memory-grid" v-else>
@@ -75,20 +76,11 @@ function displayTrait(mem) {
         </div> 
       </div>
     </div>
-  </div>
+  </PageFrame>
 </template>
 
 <style scoped>
-.scroll-container { padding: var(--space-3xl); display: flex; flex-direction: column; gap: var(--space-xl); height: 100%; overflow-y: auto; }
-.scroll-container::-webkit-scrollbar { width: 6px; }
-.scroll-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-xs); }
-.view-title { color: var(--text-primary); font-size: 18px; font-weight: normal; margin-bottom: var(--space-sm); }
-.memory-header { border-bottom: 1px solid var(--border-strong); padding-bottom: var(--space-lg); }
-.memory-subtitle { color: var(--text-muted); font-size: 13px; margin-top: var(--space-xs); }
 .search-console { display: flex; gap: var(--space-lg); margin-bottom: var(--space-lg); align-items: center; }
-.filter-capsules { display: flex; background: var(--bg-hover); border-radius: var(--radius-pill); padding: var(--space-2xs); }
-.filter-capsules button { background: transparent; border: none; color: var(--text-muted); padding: 6px 16px; border-radius: var(--radius-pill); cursor: pointer; font-size: 12px; transition: background var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard); font-family: var(--font-mono); }
-.filter-capsules button.active { background: var(--accent); color: var(--text-inverse); font-weight: bold; }
 .empty-state { color: var(--text-disabled); font-family: var(--font-mono); margin-top: var(--space-xl); }
 .memory-grid { display: flex; flex-direction: column; gap: var(--space-lg); }
 .memory-card { background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: var(--space-lg); position: relative; overflow: hidden; transition: background var(--duration-slow) var(--ease-standard), border-color var(--duration-slow) var(--ease-standard); }
