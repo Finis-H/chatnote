@@ -164,7 +164,7 @@ const handleScroll = async (e) => {
           @click="endTempSession"
           title="结束并清空当前临时会话"
         >
-          结束临时会话
+          结束并清空
         </button>
       </div>
     </div>

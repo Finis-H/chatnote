@@ -35,8 +35,8 @@ defineEmits(['cancel', 'confirm']);
           <dd>{{ impact }}</dd>
         </div>
         <div class="summary-row">
-          <dt>是否不可撤销</dt>
-          <dd :class="{ 'warning-text': irreversible }">{{ irreversible ? '是' : '否' }}</dd>
+          <dt>能否撤销</dt>
+          <dd :class="{ 'warning-text': irreversible }">{{ irreversible ? '不可撤销' : '可撤销' }}</dd>
         </div>
       </dl>
 

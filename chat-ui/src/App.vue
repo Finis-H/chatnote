@@ -162,9 +162,9 @@ onUnmounted(async () => {
     </div>
     <DangerDialog
       :show="deleteModal.show"
-      title="系统删除确认"
+      title="删除档案确认"
       :object-name="deleteModal.note?.title || '未命名档案'"
-      impact="将删除相关本地文件与对话记录。"
+      impact="将删除该档案的本地文件、列表记录和相关对话记录。"
       :irreversible="true"
       risk-tip="删除前请确认该档案不再需要；此操作完成后无法在应用内恢复。"
       confirm-text="确认删除"
@@ -191,8 +191,8 @@ onUnmounted(async () => {
         </div>
         <div class="modal-actions">
           <button class="btn-cancel" @click="respondPluginPermission('deny')">拒绝</button>
-          <button class="btn-cancel" @click="respondPluginPermission('allow_once')">允许一次</button>
-          <button class="btn-confirm" @click="respondPluginPermission('allow_session')">本次会话允许</button>
+          <button class="btn-cancel" @click="respondPluginPermission('allow_once')">仅本次调用允许</button>
+          <button class="btn-confirm" @click="respondPluginPermission('allow_session')">本次会话内允许</button>
         </div>
       </div>
     </div>

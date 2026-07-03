@@ -51,7 +51,7 @@ function requestDelete(event, note) {
       @click="openNote(n)"
     >
       <template #status>
-        <button class="delete-btn" @click="requestDelete($event, n)" title="彻底删除">🗑️</button>
+        <button class="delete-btn" @click="requestDelete($event, n)" title="删除档案">🗑️</button>
       </template>
       <p class="card-summary">{{ n.summary }}</p>
       <div class="card-tags" v-if="n.keywords && n.keywords.length">

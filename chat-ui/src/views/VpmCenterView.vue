@@ -38,7 +38,7 @@
     :show="!!pendingUninstall"
     title="插件卸载确认"
     :object-name="pendingUninstall?.pluginName || '未命名插件'"
-    impact="将删除该插件产生的本地专属资产，并清理该插件关联的 RAG 向量记录。"
+    impact="将删除该插件的本地数据、专属资产，并清理其关联的 RAG 向量记录。"
     :irreversible="true"
     risk-tip="建议先进入该插件的配置或管理面板执行导出备份，再继续卸载。"
     confirm-text="确认卸载"

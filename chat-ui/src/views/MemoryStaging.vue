@@ -45,7 +45,7 @@ function displayTrait(mem) {
 <template>
   <PageFrame
     title="🧠 记忆事件同步"
-    subtitle="在此处理低置信度、关系变更、手动记忆更新和冲突候选。超时 3 天的待审项将自动合并。"
+    subtitle="在此处理低置信度、关系变更、手动记忆更新和冲突候选。待审项未处理满 3 天后，将自动采纳并生效。"
   >
     <div class="search-console">
       <SegmentedControl v-model="memoryFilter" :options="memoryFilterOptions" />
@@ -57,7 +57,7 @@ function displayTrait(mem) {
           <span class="mem-tag">{{ mem.category.toUpperCase() }}</span>
           <span class="mem-status" v-if="mem.status === 'MERGED'">✨ 已合并生效</span>
           <span class="mem-status" v-if="mem.status === 'REJECTED'">❌ 已驳回</span>
-          <span class="mem-status" v-if="mem.status === 'AUTO_OVERWRITTEN'">⏰ 超时自动合并</span>
+          <span class="mem-status" v-if="mem.status === 'AUTO_OVERWRITTEN'">⏰ 超时自动采纳</span>
           <span class="mem-status blink" v-if="mem.status === 'PENDING'">⚠️ 事件待审</span>
         </div>
         <div class="card-body">
@@ -70,8 +70,8 @@ function displayTrait(mem) {
         <div class="card-footer" v-if="mem.status === 'PENDING'">
           <div>⏳ 倒计时: <span class="countdown">{{ formatExpireTime(mem.expires_at) }}</span></div>
           <div class="decision-actions">
-            <button class="decision-btn accept" @click="resolveMemoryConflict(mem.id, 'accept')">是</button>
-            <button class="decision-btn reject" @click="resolveMemoryConflict(mem.id, 'reject')">否</button>
+            <button class="decision-btn accept" @click="resolveMemoryConflict(mem.id, 'accept')">采纳更新</button>
+            <button class="decision-btn reject" @click="resolveMemoryConflict(mem.id, 'reject')">驳回更新</button>
           </div>
         </div> 
       </div>

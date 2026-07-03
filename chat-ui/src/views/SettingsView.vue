@@ -35,7 +35,7 @@ const { saveSystemConfig } = useNeuroLink();
         <label>轻量提纯模型 (Model Mini)</label>
         <input class="setting-input" v-model="sysConfig.model_mini" placeholder="例如: gpt-3.5-turbo" />
       </div>
-      <button class="save-btn" @click="saveSystemConfig">⚡ 烧录并热重载引擎</button>
+      <button class="save-btn" @click="saveSystemConfig">保存并重载配置</button>
     </div>
   </div>
 </template>

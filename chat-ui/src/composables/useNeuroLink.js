@@ -551,7 +551,7 @@ export function useNeuroLink() {
           if (result.active_config) sysConfig.value = result.active_config;
           const failedChecks = (result.checks || []).filter(item => !item.ok).map(item => item.name).join(', ');
           const failedSuffix = failedChecks ? ` 失败项: ${failedChecks}` : '';
-          showToast(result.ok ? `✅ ${result.message || '系统核心已热重载！'}` : `⚠️ ${result.message || '配置体检未通过，已保留当前配置。'}${failedSuffix}`);
+          showToast(result.ok ? `${result.message || '配置已保存并完成重载。'}` : `${result.message || '新配置未生效，已继续使用当前配置。'}${failedSuffix}`);
           if (result.ok) switchView('chat');
         }
         else if (data.type === 'system_toast') showToast("[系统通知] " + data.content);
@@ -729,7 +729,7 @@ export function useNeuroLink() {
 
   function saveSystemConfig() {
     sendWsCommand({ type: "save_config", content: sysConfig.value });
-    showToast("🩺 正在进行配置体检...");
+    showToast("正在保存并验证配置...");
   }
 
   function confirmImport() {
