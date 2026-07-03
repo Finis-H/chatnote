@@ -30,25 +30,41 @@
   <transition name="fade">
       <component v-if="activeManager" :is="activeManager" @close="activeManager = null" />
     </transition>
+  <DangerDialog
+    :show="!!pendingUninstall"
+    title="插件卸载确认"
+    :object-name="pendingUninstall?.pluginName || '未命名插件'"
+    impact="将删除该插件产生的本地专属资产，并清理该插件关联的 RAG 向量记录。"
+    :irreversible="true"
+    risk-tip="建议先进入该插件的配置或管理面板执行导出备份，再继续卸载。"
+    confirm-text="确认卸载"
+    @cancel="cancelUninstall"
+    @confirm="uninstallPlugin"
+  />
 </template>
 
 <script setup>
 import { ref } from 'vue';
 import { pluginsList, useNeuroLink } from '../composables/useNeuroLink.js'; 
 import { loadVpmComponent } from '../utils/vpmLoader.js';
+import DangerDialog from '../components/DangerDialog.vue';
 
-const { sendWsCommand, showToast } = useNeuroLink();
+const { sendWsCommand } = useNeuroLink();
 const activeManager = ref(null);
+const pendingUninstall = ref(null);
 const openManager = (pluginId) => {
   activeManager.value = loadVpmComponent(pluginId, 'Manager');
 };
 const confirmUninstall = (pluginId, pluginName) => {
-  // 采用通用的兜底警告词，适用于所有自带数据的插件
-  const msg = `正在卸载 [${pluginName}]。\n\n这会删除该插件产生的本地专属资产（包括图床、媒体文件），并清理该插件关联的 RAG 向量记录。\n\n建议先进入该插件的“配置/管理”面板执行【导出备份】。\n\n确定要继续卸载吗？`;
-  
-  if (window.confirm(msg)) {
-    sendWsCommand({ type: "uninstall_plugin", plugin_id: pluginId });
-  }
+  pendingUninstall.value = { pluginId, pluginName };
+};
+const cancelUninstall = () => {
+  pendingUninstall.value = null;
+};
+const uninstallPlugin = () => {
+  if (!pendingUninstall.value) return;
+  sendWsCommand({ type: "uninstall_plugin", plugin_id: pendingUninstall.value.pluginId });
+  pendingUninstall.value = null;
 };
 </script>
 

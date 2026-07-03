@@ -6,6 +6,7 @@ import { Box, Connection, Document, Expand, Fold, Monitor, Promotion, Setting, S
 import { activeView, pendingCount, userInput, systemToast, inputError, deleteModal, pluginPermissionRequest, currentNote, connectionState, useNeuroLink } from './composables/useNeuroLink';
 import { activeAgentComponent, activeAgentDock } from './composables/useNeuroLink';
 import AgentDock from './components/AgentDock.vue';
+import DangerDialog from './components/DangerDialog.vue';
 import './assets/cyber-theme.css'; // 载入全局样式
 
 // 懒加载视窗组件，极致优化初始启动速度
@@ -158,20 +159,18 @@ onUnmounted(async () => {
 
       <AgentDock />
 
-    </div> <div class="custom-modal-overlay" v-if="deleteModal.show" @click="cancelDelete">
-      <div class="custom-modal" @click.stop>
-        <div class="modal-icon">⚠️</div>
-        <h3 class="modal-title">系统删除确认</h3>
-        <p class="modal-desc">
-          确定要删除档案 <span class="highlight-text">《{{ deleteModal.note?.title }}》</span> 吗？<br>
-          <span class="warning-text">相关本地文件与对话记录将被删除，此操作不可撤销。</span>
-        </p>
-        <div class="modal-actions">
-          <button class="btn-cancel" @click="cancelDelete">取消</button>
-          <button class="btn-confirm" @click="confirmDelete">确认删除</button>
-        </div>
-      </div>
     </div>
+    <DangerDialog
+      :show="deleteModal.show"
+      title="系统删除确认"
+      :object-name="deleteModal.note?.title || '未命名档案'"
+      impact="将删除相关本地文件与对话记录。"
+      :irreversible="true"
+      risk-tip="删除前请确认该档案不再需要；此操作完成后无法在应用内恢复。"
+      confirm-text="确认删除"
+      @cancel="cancelDelete"
+      @confirm="confirmDelete"
+    />
 
     <div class="custom-modal-overlay" v-if="pluginPermissionRequest" @click.stop>
       <div class="custom-modal permission-modal" @click.stop>
