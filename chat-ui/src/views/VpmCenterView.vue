@@ -6,20 +6,24 @@
     </div>
 
     <div class="plugin-grid" v-if="pluginsList.length > 0">
-      <div class="plugin-card" v-for="plugin in pluginsList" :key="plugin.plugin_id">
-        <div class="card-header">
-          <h3 class="p-name">{{ plugin.name }}</h3>
+      <VaultCard
+        v-for="plugin in pluginsList"
+        :key="plugin.plugin_id"
+        class="plugin-card"
+        :title="plugin.name"
+        :subtitle="plugin.description"
+      >
+        <template #status>
           <span class="p-version">v{{ plugin.version }}</span>
-        </div>
-        <p class="p-desc">{{ plugin.description }}</p>
-        <div class="card-footer">
+        </template>
+        <template #actions>
           <span class="p-author">Author: {{ plugin.author }}</span>
           <div class="p-actions">
             <button class="btn-setting" title="配置" @click="openManager(plugin.plugin_id)">⚙️ 管理</button>
             <button class="btn-uninstall" title="卸载" @click="confirmUninstall(plugin.plugin_id, plugin.name)">🗑️</button>
           </div>
-        </div>
-      </div>
+        </template>
+      </VaultCard>
     </div>
 
     <div class="empty-state" v-else>
@@ -30,25 +34,42 @@
   <transition name="fade">
       <component v-if="activeManager" :is="activeManager" @close="activeManager = null" />
     </transition>
+  <DangerDialog
+    :show="!!pendingUninstall"
+    title="插件卸载确认"
+    :object-name="pendingUninstall?.pluginName || '未命名插件'"
+    impact="将删除该插件的本地数据、专属资产，并清理其关联的 RAG 向量记录。"
+    :irreversible="true"
+    risk-tip="建议先进入该插件的配置或管理面板执行导出备份，再继续卸载。"
+    confirm-text="确认卸载"
+    @cancel="cancelUninstall"
+    @confirm="uninstallPlugin"
+  />
 </template>
 
 <script setup>
 import { ref } from 'vue';
 import { pluginsList, useNeuroLink } from '../composables/useNeuroLink.js'; 
 import { loadVpmComponent } from '../utils/vpmLoader.js';
+import DangerDialog from '../components/DangerDialog.vue';
+import VaultCard from '../components/VaultCard.vue';
 
-const { sendWsCommand, showToast } = useNeuroLink();
+const { sendWsCommand } = useNeuroLink();
 const activeManager = ref(null);
+const pendingUninstall = ref(null);
 const openManager = (pluginId) => {
   activeManager.value = loadVpmComponent(pluginId, 'Manager');
 };
 const confirmUninstall = (pluginId, pluginName) => {
-  // 采用通用的兜底警告词，适用于所有自带数据的插件
-  const msg = `正在卸载 [${pluginName}]。\n\n这会删除该插件产生的本地专属资产（包括图床、媒体文件），并清理该插件关联的 RAG 向量记录。\n\n建议先进入该插件的“配置/管理”面板执行【导出备份】。\n\n确定要继续卸载吗？`;
-  
-  if (window.confirm(msg)) {
-    sendWsCommand({ type: "uninstall_plugin", plugin_id: pluginId });
-  }
+  pendingUninstall.value = { pluginId, pluginName };
+};
+const cancelUninstall = () => {
+  pendingUninstall.value = null;
+};
+const uninstallPlugin = () => {
+  if (!pendingUninstall.value) return;
+  sendWsCommand({ type: "uninstall_plugin", plugin_id: pendingUninstall.value.pluginId });
+  pendingUninstall.value = null;
 };
 </script>
 
@@ -61,13 +82,9 @@ const confirmUninstall = (pluginId, pluginName) => {
 .btn-scan:hover { background: var(--accent-soft); box-shadow: var(--shadow-glow-soft);}
 
 .plugin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-xl); }
-.plugin-card { background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: var(--space-xl); display: flex; flex-direction: column; transition: transform var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard);}
-.plugin-card:hover { border-color: var(--accent-border); background: var(--bg-panel-raised); transform: translateY(-3px); box-shadow: var(--shadow-panel);}
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-lg);}
-.p-name { margin: 0; font-size: 18px; color: var(--text-primary);}
+.plugin-card { border-color: var(--border-strong); }
+.plugin-card:hover { border-color: var(--accent-border); background: var(--bg-panel-raised); transform: translateY(-3px); box-shadow: var(--shadow-panel); }
 .p-version { font-size: 12px; background: var(--bg-panel-raised); padding: 2px 6px; border-radius: var(--radius-xs); color: var(--text-muted);}
-.p-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: var(--space-xl); flex: 1;}
-.card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-strong); padding-top: var(--space-lg);}
 .p-author { font-size: 11px; color: var(--text-disabled); font-family: var(--font-mono);}
 .p-actions button { background: none; border: none; cursor: pointer; opacity: 0.68; transition: opacity var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard); font-size: 16px;}
 .p-actions button:hover { opacity: 1; }

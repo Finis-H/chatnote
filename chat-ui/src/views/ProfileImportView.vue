@@ -51,7 +51,7 @@ function handleFileChange(e) {
         <textarea class="preview-text" :value="profileImportPreview" readonly></textarea>
         <div class="action-row">
           <button class="ghost-btn" @click="cancelProfileImport">取消导入</button>
-          <button class="save-btn" @click="commitProfileImport">确认写入记忆</button>
+          <button class="save-btn" @click="commitProfileImport">确认提交到记忆待审</button>
         </div>
       </div>
 
@@ -62,7 +62,7 @@ function handleFileChange(e) {
           {{ importFile ? '📄 ' + importFile.name : '点击选择初始化文档 (.md / .txt)' }}
         </label>
         <button class="save-btn" :disabled="!importFile || isImporting || profileImportStage !== 'idle'" @click="confirmImport">
-          {{ profileImportStage === 'preparing' ? '⚡ 正在标准化整理...' : profileImportStage === 'committing' ? '⚡ 正在写入记忆...' : '开始标准化预览' }}
+          {{ profileImportStage === 'preparing' ? '正在标准化整理...' : profileImportStage === 'committing' ? '正在提交到记忆流程...' : '开始标准化预览' }}
         </button>
       </div>
     </div>
