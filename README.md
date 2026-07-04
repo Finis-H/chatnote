@@ -1,54 +1,35 @@
 # Vault OS
 
-Vault OS 是一个本地 AI 助手与外脑系统。它把大模型对话、长期记忆、RAG 知识检索、工具调用、异步智能体执行、Trace 观测和桌面 UI 组合在一起，用于构建可扩展、可审计、可插件化的个人智能工作台。
+Vault OS 是一个本地优先的个人 AI 工作台，聚焦长期记忆、知识检索、插件执行与 Trace 可观测协作。
 
-如果你想先了解 Vault OS 的产品定位、使用场景和核心体验，请阅读 [产品介绍](PRODUCT.md)。
+它不是普通聊天框，而是一个正在产品化的本地桌面 AI 系统：后端负责会话推理、记忆/RAG、工具调度、Trace 和插件安全；前端负责主控终端、Command Console、AgentDock、知识/记忆视图、设置和插件中心。
 
-项目主体由 Python 后端、Vue 3 + Tauri 桌面前端，以及 `vault/plugins` 下的 VPM 插件生态组成。后端负责会话推理、记忆系统、向量库、工具调度、插件安全和 WebSocket 网关；前端负责聊天终端、临时会话、执行观测、知识与记忆管理、画像导入、设置页和插件面板。
+## 当前状态
 
-## 核心能力
+Vault OS 目前处于活跃开发和产品化打磨阶段。主控体验 v1 的产品化骨架已阶段性完成，包含分组导航、Command Console、Trace 基础观测面板、AgentDock 和统一设计 token。
 
-- **AI 对话终端**：支持多线程聊天历史、模型配置读取、黑盒输入输出审计和 WebSocket 流式回传。
-- **长期记忆与画像**：基于 SQLite/SQLModel 维护实体、关系、事件源、待审项、L2 实体快照和认知快照。
-- **RAG 知识检索**：使用 ChromaDB 持久化向量库，并把检索上下文与画像快照组装进系统提示词。
-- **JIT 工具规划**：根据用户意图和可用工具生成执行蓝图，简单闲聊与本地画像问答会尽量绕过工具规划。
-- **Trace 执行观测**：记录 trace/span、任务状态、工具调用和快照补偿，前端可展示执行过程。
-- **临时会话隔离**：临时会话不读取主记忆、不写入持久状态，结束后会丢弃迟到结果。
-- **VPM 插件生态**：支持插件 manifest、工具注册、动态 Vue 面板、权限声明、敏感权限确认和第三方输出隔离。
-- **桌面应用壳**：通过 Tauri v2 提供桌面窗口、sidecar 启动、快捷键和本地运行体验。
+仍需继续推进的部分包括：全站业务页一致性、高风险确认体系化、更多基础组件覆盖、更完整的 Trace 复盘和作品集材料归档。不要把当前状态理解为“全站改版完成”或“开箱即用商业产品”。
 
-## 技术栈
+## 核心亮点
 
-- 后端：Python、FastAPI、Uvicorn、OpenAI SDK、SQLModel、SQLite、ChromaDB、DashScope、Requests、DDGS、feedparser、trafilatura、python-frontmatter、python-multipart。
-- 前端：Vue 3、Vite、Element Plus、marked、DOMPurify、highlight.js、vue3-sfc-loader。
-- 桌面壳：Rust、Tauri v2、Tauri shell/opener/global-shortcut 插件。
-- 插件：VPM manifest、可选 FastAPI router、Vue 单文件组件、HTTP 或 subprocess 工具执行。
-- 打包：PyInstaller `vault_engine.spec` + Tauri external sidecar。
+- **Local-first AI workbench**：运行时数据围绕本地 `vault/` 组织，便于掌控、迁移和审计。
+- **Long-term memory**：基于 SQLite/SQLModel 维护画像、实体关系、事件源、待审项和 L2 快照。
+- **RAG / knowledge workspace**：使用 ChromaDB 持久化向量库，并把检索上下文与画像快照组装进系统提示词。
+- **Plugin / tool execution**：通过工具注册器、执行器和 VPM 插件接入搜索、知识检索、UI 指令、HTTP/subprocess 插件能力。
+- **Trace observability**：记录 trace/span、任务状态、耗时和快照补偿，前端可查看执行步骤。
+- **Command Console**：底部主控命令入口，保留命令提示符、发送按钮、回车提示和焦点状态。
+- **AgentDock**：插件/Agent 任务面板宿主，支持 dock、mini、focus 形态和任务状态表达。
+- **Tauri desktop UI**：Vue 3 + Vite + Tauri v2 桌面前端，生产模式通过 sidecar 启动后端。
 
-## 目录导览
+## 产品化改版亮点
 
-```text
-.
-├── main.py                 # 核心引擎：配置、LLM、RAG、记忆、JIT、画像导入、工具执行入口
-├── server.py               # FastAPI 网关：动态端口、WebSocket、Trace API、插件路由和权限交互
-├── agent_runner.py         # 异步智能体任务入口，在线程池中执行重型推理
-├── core_bus.py             # 事件总线，隔离主会话、临时会话和插件 UI 消息
-├── trace_system.py         # Trace/span 记录、事件推送、超时看门狗和快照查询
-├── memory_system.py        # 画像、记忆、实体关系、待审和 L2 快照内核
-├── memory_rules.py         # 瞬时交互识别与 JIT 意图门控规则
-├── plugin_security.py      # 插件安全、权限确认、脱敏和不可信输出包裹
-├── tool_registry.py        # 内置工具、外部工具和插件工具发现
-├── tool_executor.py        # 工具执行器：搜索、知识检索、UI 指令、HTTP/subprocess 插件
-├── rag_assembler.py        # 组装画像、认知快照和向量检索上下文
-├── chroma_engine.py        # ChromaDB 向量库封装
-├── db.py                   # SQLModel 数据库入口
-├── chat-ui/                # Vue 3 + Vite + Tauri 前端
-├── tests/                  # 单元测试：记忆、插件安全、JIT 门控、画像导入、搜索等
-├── vault/                  # 运行时数据根目录：配置、数据库、Trace、知识库、插件
-├── vault_seed/             # 首次启动或空 vault 初始化数据
-├── requirements.txt        # 后端 Python 依赖
-└── vault_engine.spec       # PyInstaller sidecar 打包配置
-```
+- 建立 `chat-ui/src/assets/cyber-theme.css` 设计 token，覆盖颜色、背景层级、边框、圆角、间距、阴影、focus 和动效。
+- 左侧导航从扁平列表收敛为执行、知识、系统分组。
+- 顶部展示连接状态，帮助判断 WebSocket / 后端状态。
+- 底部输入区收敛为 Command Console，保留轻量、直接的主控入口。
+- 主控终端内置 Trace 基础观测台，可查看执行步骤、层级、状态和耗时。
+- AgentDock 将插件 UI 从临时侧栏推进为可管理的任务面板。
+- 恢复并统一 `focus-visible`，避免桌面工具丢失键盘可用性。
 
 ## 快速开始
 
@@ -62,7 +43,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-后端配置保存在 `vault/system_config.json`。请在本地配置模型、API Key、base URL 和 embedding 参数，不要把真实密钥提交到版本库。
+后端配置保存在 `vault/system_config.json`。请在本地配置模型、API Key、base URL 和 embedding 参数，不要提交真实密钥、token 或个人隐私数据。
 
 ### 2. 启动后端
 
@@ -94,56 +75,88 @@ npm run tauri -- dev
 
 桌面开发模式会使用 Tauri v2 启动窗口。生产模式下，Tauri 会启动 `vault_engine` sidecar，并通过运行环境定位真实的 `VAULT_ROOT`。
 
-## 配置与运行时数据
+## 项目结构
 
-`VAULT_ROOT` 是运行时数据的唯一根目录。开发环境通常是项目根目录下的 `vault/`，打包环境可能由环境变量或可执行文件位置决定。业务代码应通过 `VAULT_ROOT` 定位运行时文件，不要硬编码相对 `vault/...` 路径。
+```text
+.
+├── main.py                 # 核心引擎：配置、LLM、RAG、记忆、JIT、画像导入、工具执行入口
+├── server.py               # FastAPI 网关：动态端口、WebSocket、Trace API、插件路由和权限交互
+├── agent_runner.py         # 异步智能体任务入口，在线程池中执行重型推理
+├── core_bus.py             # 事件总线，隔离主会话、临时会话和插件 UI 消息
+├── trace_system.py         # Trace/span 记录、事件推送、看门狗和快照查询
+├── memory_system.py        # 画像、记忆、实体关系、待审和 L2 快照内核
+├── memory_rules.py         # 瞬时交互识别与 JIT 意图门控规则
+├── plugin_security.py      # 插件安全、权限确认、脱敏和不可信输出包裹
+├── tool_registry.py        # 内置工具、外部工具和插件工具发现
+├── tool_executor.py        # 工具执行器：搜索、知识检索、UI 指令、HTTP/subprocess 插件
+├── rag_assembler.py        # 组装画像、认知快照和向量检索上下文
+├── chroma_engine.py        # ChromaDB 向量库封装
+├── db.py                   # SQLModel 数据库入口
+├── chat-ui/                # Vue 3 + Vite + Tauri 前端
+├── tests/                  # Python 单元测试
+├── vault/                  # 运行时数据根目录：配置、数据库、Trace、知识库、插件
+├── vault_seed/             # 首次启动或空 vault 初始化数据
+├── requirements.txt        # 后端 Python 依赖
+└── vault_engine.spec       # PyInstaller sidecar 打包配置
+```
 
-常见运行时文件：
+前端主界面相关文件：
 
-- `vault/system_config.json`：模型、API Key、embedding 和 base URL 配置。
-- `vault/chat_history.json`：聊天历史。
-- `vault/vault_core.db`：主数据库，包含记忆、画像、实体关系和待审项。
-- `vault/vault_trace.db`：Trace 运行记录和 span 事件。
-- `vault/plugin_permissions.json`：第三方插件敏感权限授权记录。
-- `vault/blackbox_raw.jsonl`：聊天输入输出审计日志。
-- `vault/knowledge/vector_store/`：ChromaDB 向量库。
-- `vault/plugins/`：VPM 插件目录。
+- `chat-ui/src/App.vue`：应用 shell、分组导航、Command Console、权限弹窗、全局 Toast。
+- `chat-ui/src/views/TerminalView.vue`：主控终端、临时会话和 Trace 基础面板。
+- `chat-ui/src/components/AgentDock.vue`：插件/Agent 任务面板宿主。
+- `chat-ui/src/assets/cyber-theme.css`：全局设计 token 和 Markdown 基础样式。
 
-这些文件大多属于本地运行态数据，通常不应提交真实内容、密钥、token 或个人隐私数据。
+## 开发与验证
 
-## 测试
-
-当前测试以 Python `unittest` 为主：
+后端测试：
 
 ```powershell
 python -m unittest discover tests
 ```
 
-测试覆盖 JIT 意图门控、记忆缓冲池、认知快照、插件安全、画像导入、实体隔离、关系图、姓名冲突和网络搜索工具等关键路径。
-
-## VPM 插件开发
-
-插件位于 `vault/plugins/{plugin_id}/`，目录名就是系统识别使用的 `plugin_id`。插件通常包含：
-
-- `manifest.json`：插件中心展示信息、工具契约、执行方式和安全声明。
-- `api.py`：可选后端 API、生命周期钩子或数据初始化逻辑。
-- `ui/*.vue`：可选 Vue 面板，由前端动态加载。
-- `tools/*.json`：可选额外工具描述。
-- `knowledge/`、`assets/`、`audio/` 等插件私有资源目录。
-
-插件必须声明 `security.trust`、`security.permissions` 和 `security.sensitive_reason`。运行时会重新归一化安全字段，第三方插件不能仅靠 manifest 自称 first-party 来获得信任。
-
-更完整的插件协议、manifest 示例和安全规则见 `vault/plugins/README.md`。
-
-## 打包说明
-
-后端 sidecar 使用 PyInstaller 配置：
+前端构建：
 
 ```powershell
-pyinstaller vault_engine.spec
+cd chat-ui
+npm run build
 ```
 
-Tauri 配置位于 `chat-ui/src-tauri/tauri.conf.json`，其中 `externalBin` 指向 `bin/vault_engine`。完整桌面打包需要准备 Python sidecar、Node/Vite 前端依赖、Rust/Tauri 工具链和平台相关打包环境。
+前端预览：
+
+```powershell
+cd chat-ui
+npm run preview
+```
+
+当前 `chat-ui/package.json` 未声明 lint 脚本；如需 lint，请先根据项目实际脚本补充或确认。
+
+## 文档导航
+
+- [PRODUCT.md](PRODUCT.md)：产品定位、当前能力、产品化改版边界和 Roadmap。
+- `vault/plugins/README.md`：VPM 插件协议、manifest 示例和安全规则。
+
+## Roadmap
+
+Now:
+
+- 稳定主控体验 v1 的产品化骨架。
+- 同步 README 与 PRODUCT 的公开说明口径。
+- 保持当前改版边界，不混入业务协议变更。
+
+Next:
+
+- 统一危险确认和权限相关交互。
+- 扩大 `PageFrame`、`SegmentedControl`、`VaultCard` 等基础组件覆盖范围。
+- 提升设置、画像导入、插件中心和记忆相关业务页一致性。
+- 增强 Trace 的阶段摘要、错误解释和恢复建议。
+
+Later:
+
+- 更完整的 Trace 归档和任务复盘。
+- 插件中心可信体系和插件市场方向探索。
+- 更成熟的记忆审核体验。
+- 作品集展示页或案例材料归档。
 
 ## 协作注意事项
 

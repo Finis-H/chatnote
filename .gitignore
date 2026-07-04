@@ -58,9 +58,8 @@ chroma_db/
 faiss_index/
 .codex/
 .agents/
-AGENTS.md
-agents.md
 docs/
+temp/
 
 # 临时生成的文档或媒体文件
 *.md.tmp
