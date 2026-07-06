@@ -58,7 +58,7 @@ chroma_db/
 faiss_index/
 .codex/
 .agents/
-docs/
+docs/draft
 temp/
 
 # 临时生成的文档或媒体文件
