@@ -1,5 +1,7 @@
 # Vault OS
 
+> 文档定位：本文保留原根目录 README 的开发者安装、运行、构建、项目结构和协作说明。项目入口页见 [../README.md](../README.md)，产品说明见 [PRODUCT.md](PRODUCT.md)，产品案例见 [PRODUCT_CASE.md](PRODUCT_CASE.md)。
+
 Vault OS 是一个本地 AI 工作台，聚焦长期记忆、知识检索、插件执行与 Trace 可观测协作。
 
 它不是普通聊天框，而是一个正在产品化的本地桌面 AI 系统：后端负责会话推理、记忆/RAG、工具调度、Trace 和插件安全；前端负责主控终端、Command Console、AgentDock、知识/记忆视图、设置和插件中心。
@@ -133,8 +135,13 @@ npm run preview
 
 ## 文档导航
 
+- [../README.md](../README.md)：项目门面和读者导航。
 - [PRODUCT.md](PRODUCT.md)：产品定位、当前能力、产品化改版边界和 Roadmap。
-- `vault/plugins/README.md`：VPM 插件协议、manifest 示例和安全规则。
+- [PRODUCT_CASE.md](PRODUCT_CASE.md)：面向 AI 产品经理面试的作品集案例。
+- [EVAL_REPORT.md](EVAL_REPORT.md)：AI 产品质量评估占位文档。
+- [ROADMAP.md](ROADMAP.md)：产品演进路线占位文档。
+- [ARCHITECTURE.md](ARCHITECTURE.md)：系统架构占位文档。
+- [../vault/plugins/README.md](../vault/plugins/README.md)：VPM 插件协议、manifest 示例和安全规则。
 
 ## Roadmap
 

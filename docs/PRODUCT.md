@@ -1,5 +1,7 @@
 # Vault OS 产品说明
 
+> 文档定位：本文是 Vault OS 的产品定义文档，说明产品问题、原则、当前能力、边界和 Roadmap。项目入口页见 [../README.md](../README.md)，开发者安装与运行见 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)，作品集案例见 [PRODUCT_CASE.md](PRODUCT_CASE.md)。
+
 ## 一句话定位
 
 Vault OS 是一个本地 AI 工作台，用于长期记忆、知识检索、插件执行和可观测 AI 协作。
@@ -119,4 +121,4 @@ AgentDock 是当前插件/Agent 面板宿主，用于承载后端通过 `ui_comm
 - 知识管理体验继续打磨，包括资料摄入、检索反馈和插件知识材料管理。
 - 作品集展示页或案例材料，补齐 before/after 截图、设计取舍和阶段成果。
 
-开发者入门、启动方式和目录说明见 README.md。
+开发者入门、启动方式和目录说明见 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)。
