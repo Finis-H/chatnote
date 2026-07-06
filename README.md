@@ -1,23 +1,29 @@
 # Vault OS
 
-Vault OS is a local-first long-term memory AI Agent workbench for AI power users and knowledge workers.
+> 一个本地优先的长期记忆 AI Agent 工作台，面向 AI 重度用户、知识工作者和开发者。
 
-It helps users connect private knowledge, long-term memory, tool use, traceable Agent execution, and plugin workflows into a controllable desktop AI assistant.
+Vault OS 希望把私人知识、长期记忆、Tool Use、可追踪的 Agent 执行过程和插件工作流，连接成一个用户可掌控的桌面 AI 助手。
 
-## Navigation
+## 从这里开始
 
-- Product Case: [./docs/PRODUCT_CASE.md](./docs/PRODUCT_CASE.md)
-- Product Spec: [./docs/PRODUCT.md](./docs/PRODUCT.md)
-- Developer Guide: [./docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)
-- Eval Report: [./docs/EVAL_REPORT.md](./docs/EVAL_REPORT.md)
-- Roadmap: [./docs/ROADMAP.md](./docs/ROADMAP.md)
-- Architecture: [./docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+| 目标 | 推荐入口 |
+|---|---|
+| 项目案例 | [Product Case](./docs/PRODUCT_CASE.md) |
+| 项目定义 | [Product Spec](./docs/PRODUCT.md) |
+| 开发指南 | [Developer Guide](./docs/DEVELOPER_GUIDE.md) |
+| 项目测评 | [Eval Report](./docs/EVAL_REPORT.md) |
+| 开发路线 | [Roadmap](./docs/ROADMAP.md) |
+| 架构设计 | [Architecture](./docs/ARCHITECTURE.md) |
 
-## Screenshot
+## 前端界面示例
 
 TODO: Add main console screenshot to `docs/assets/screenshots/main-console.png`.
 
-## Problem
+TODO: Add Trace panel screenshot to `docs/assets/screenshots/trace-panel.png`.
+
+TODO: Add architecture diagram to `docs/assets/diagrams/architecture.png`.
+
+## 为什么做 Vault OS
 
 普通 AI 聊天工具在长期使用中存在：
 
@@ -27,32 +33,62 @@ TODO: Add main console screenshot to `docs/assets/screenshots/main-console.png`.
 - 工具调用过程不透明
 - 插件权限边界不清晰
 
-## Core Scenarios
+Vault OS 探索的是：AI 助手如何从“聊天框”变成一个可管理、可观察、可长期协作的本地工作台。
 
-- Long-term personal memory and preference management
-- Local knowledge Q&A and context augmentation
-- Agent tool use with traceable execution
-- Temporary session isolation and plugin permission control
+## 核心场景
 
-## Core Capabilities
+1. 长期个人记忆和偏好管理
+2. 本地知识问答和上下文增强
+3. 可追踪执行过程的 Agent Tool Use
+4. 临时会话隔离和插件权限控制
 
-- Long-term Memory
-- RAG / Local Knowledge
-- Tool Use
-- Trace / Observability
-- Plugin Permission
-- Local-first Desktop
+## 核心能力
 
-## Reader Guide
-
-| Reader | Start Here |
+| 能力 | 说明 |
 |---|---|
-| AI PM interviewer | [docs/PRODUCT_CASE.md](docs/PRODUCT_CASE.md) |
-| Product reviewer | [docs/PRODUCT.md](docs/PRODUCT.md) |
-| Developer | [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) |
-| AI product evaluator | [docs/EVAL_REPORT.md](docs/EVAL_REPORT.md) |
-| Future collaborator | [docs/ROADMAP.md](docs/ROADMAP.md) |
+| Long-term Memory | 管理用户偏好、事实、关系和项目上下文。 |
+| RAG / Local Knowledge | 把本地私人知识作为 AI 回复的上下文。 |
+| Tool Use | 让 Agent 通过受控接口调用本地或外部工具。 |
+| Trace / Observability | 展示 Agent 做了什么、调用了哪些工具、结果如何。 |
+| Plugin Permission | 管理插件权限、敏感操作和安全边界。 |
+| Local-first Desktop | 尽量让个人数据和工作流留在用户自己的环境里。 |
 
-## Quick Start
+## 项目案例
 
-For installation, local development, build commands, project structure, environment notes, and troubleshooting, see [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md).
+关于产品思考、问题定义、方案设计和指标设计，见：
+
+[docs/PRODUCT_CASE.md](./docs/PRODUCT_CASE.md)
+
+## 项目说明
+
+关于产品定位、当前能力、产品边界和 Roadmap，见：
+
+[docs/PRODUCT.md](./docs/PRODUCT.md)
+
+## 测评
+
+TODO: Add AI product quality evaluation results.
+
+评估设计将覆盖：
+
+- RAG 回答质量
+- Memory 写入准确性
+- Tool 选择和执行成功率
+- 插件权限和 Prompt Injection 安全
+- 临时会话隔离
+
+详情见：
+
+[docs/EVAL_REPORT.md](./docs/EVAL_REPORT.md)
+
+## 开发指南
+
+安装、本地开发、构建命令、项目结构和排障说明，见：
+
+[docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)
+
+## 路线图
+
+后续产品演进计划见：
+
+[docs/ROADMAP.md](./docs/ROADMAP.md)
