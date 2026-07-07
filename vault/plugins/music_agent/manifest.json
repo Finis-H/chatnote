@@ -12,13 +12,21 @@
   "type": "function",
   "function": {
     "name": "play_music_playlist",
-    "description": "音乐播放控制中心。当用户想要听歌、播放音乐，或者询问关于歌曲的意境时，调用此工具。它会在前端自动弹出沉浸式播放器。",
+    "description": "音乐播放控制中心。当用户想要听歌、播放音乐，或者询问关于歌曲的意境时，调用此工具。把用户的原始音乐请求或歌名、歌手、情绪、类型关键词交给本工具，由 music_agent 负责本地曲库召回和播放。它会在前端自动弹出沉浸式播放器。",
     "parameters": {
       "type": "object",
       "properties": {
         "keywords": {
           "type": "string",
-          "description": "用户提到的歌曲名、歌手或情感关键词（如果没有则传空字符串）"
+          "description": "用户的原始音乐请求，或用户提到的歌曲名、歌手、类型、情绪关键词（如果没有则传空字符串）"
+        },
+        "raw_query": {
+          "type": "string",
+          "description": "可选。用户未被改写的原始音乐请求；提供时优先于 keywords。"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "可选。最多返回的临时歌单曲目数，默认 10。"
         }
       }
     }

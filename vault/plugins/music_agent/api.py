@@ -6,6 +6,7 @@ import os
 import time
 import shutil
 import zipfile
+import re
 
 from core_bus import event_bus
 from openai import OpenAI
@@ -25,6 +26,104 @@ class MusicTrack(SQLModel, table=True):
     tags_raw: str = Field(default="", max_length=70) 
     lyrics: str = Field(default="", max_length=1000) 
     analysis: str = Field(default="", max_length=300) 
+
+GENERIC_MUSIC_QUERY_PREFIXES = [
+    "请帮我", "帮我", "给我", "我想", "想要", "想听", "我要", "来点", "来首",
+    "播放一首", "播放首", "播放", "放一首", "放首", "放点", "放", "听一首", "听首", "听",
+]
+GENERIC_MUSIC_QUERY_SUFFIXES = [
+    "类型的歌曲", "类型音乐", "类型的歌", "歌曲听", "音乐听", "的歌曲", "的音乐", "的歌",
+    "歌曲", "音乐", "歌",
+]
+MUSIC_QUERY_SYNONYMS = {
+    "情歌": ["爱情", "恋爱", "感情"],
+    "爱情": ["情歌", "恋爱", "感情"],
+    "伤感": ["难过", "失恋", "遗憾"],
+    "快乐": ["开心", "欢快", "愉快"],
+    "治愈": ["温柔", "安静", "放松"],
+    "rap": ["说唱"],
+    "说唱": ["rap"],
+}
+
+
+def _compact_music_query(value: str) -> str:
+    return "".join(re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", str(value or "").lower()))
+
+
+def _strip_generic_music_words(value: str) -> str:
+    text = _compact_music_query(value)
+    changed = True
+    while changed and text:
+        changed = False
+        for prefix in GENERIC_MUSIC_QUERY_PREFIXES:
+            if text.startswith(prefix):
+                text = text[len(prefix):]
+                changed = True
+        for suffix in GENERIC_MUSIC_QUERY_SUFFIXES:
+            if text.endswith(suffix) and len(text) > len(suffix):
+                text = text[:-len(suffix)]
+                changed = True
+    return text
+
+
+def _music_query_terms(query: str) -> list[str]:
+    terms = []
+    for term in (_compact_music_query(query), _strip_generic_music_words(query)):
+        if term and term not in terms:
+            terms.append(term)
+        for synonym in MUSIC_QUERY_SYNONYMS.get(term, []):
+            if synonym not in terms:
+                terms.append(synonym)
+    return terms
+
+
+def _music_track_field(track, field_name: str) -> str:
+    return str(getattr(track, field_name, "") or "").lower()
+
+
+def _score_music_track(track, terms: list[str]) -> tuple[int, list[str]]:
+    score = 0
+    reasons = []
+    weighted_fields = [
+        ("title", 100, "歌名"),
+        ("artist", 90, "歌手"),
+        ("tags_raw", 70, "标签"),
+        ("analysis", 45, "词意解析"),
+        ("lyrics", 20, "歌词"),
+    ]
+    for term in terms:
+        for field_name, weight, label in weighted_fields:
+            field_value = _music_track_field(track, field_name)
+            if term and term in field_value:
+                score += weight
+                if label not in reasons:
+                    reasons.append(label)
+    return score, reasons
+
+
+def select_music_tracks(valid_tracks, query: str, limit: int = 10):
+    terms = _music_query_terms(query)
+    if not terms:
+        selection = random.sample(valid_tracks, min(len(valid_tracks), limit))
+        return selection, {"terms": [], "match_source": "random", "candidate_count": len(valid_tracks)}
+
+    ranked = []
+    for index, track in enumerate(valid_tracks):
+        score, reasons = _score_music_track(track, terms)
+        if score > 0:
+            ranked.append((score, index, track, reasons))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    selection = [item[2] for item in ranked[:limit]]
+    reason_labels = []
+    for _score, _index, _track, reasons in ranked:
+        for reason in reasons:
+            if reason not in reason_labels:
+                reason_labels.append(reason)
+    return selection, {
+        "terms": terms,
+        "match_source": "、".join(reason_labels) if reason_labels else "none",
+        "candidate_count": len(ranked),
+    }
 
 CURRENT_DIR = os.path.join(VAULT_ROOT, "plugins", "music_agent")
 router = APIRouter()
@@ -450,33 +549,23 @@ async def music_plugin_executor(payload: dict):
     args = payload.get("args", {})
 
     if func_name == "play_music_playlist":
-        keywords = args.get("keywords", "")
+        keywords = args.get("raw_query") or args.get("keywords", "")
+        limit = args.get("limit", 10)
+        try:
+            limit = max(1, min(int(limit), 20))
+        except (TypeError, ValueError):
+            limit = 10
         with Session(engine) as session:
             all_tracks = session.exec(select(MusicTrack)).all()
             valid_tracks = [t for t in all_tracks if "【失效】" not in t.title]
             
             if not valid_tracks:
                 return "本地曲库为空，请先去管理后台录入资产。"
-
-            selection = []
             
-            # 如果有明确关键词，找不到就必须如实返回缺失。
-            if keywords and keywords.strip():
-                k = keywords.lower()
-                matched = []
-                for t in valid_tracks:
-                    corpus = f"{t.title} {t.artist} {t.tags_raw} {t.analysis} {t.lyrics}".lower()
-                    if k in corpus: matched.append(t)
-                
-                # 找不到时如实上报，不补编曲目。
-                if not matched:
-                    return f"【本地曲库检索结果】：未找到与 '{keywords}' 相关的曲目。请向用户说明本地缺失此类型歌曲，不要编造歌曲名或推荐互联网上的曲目。"
-                
-                selection = random.sample(matched, min(len(matched), 10))
-                
-            else:
-                # 只有当用户没提具体要求（比如只说了“随便放首歌”），才允许从全库随机抽取。
-                selection = random.sample(valid_tracks, min(len(valid_tracks), 10))
+            selection, match_meta = select_music_tracks(valid_tracks, keywords, limit=limit)
+            if keywords and keywords.strip() and not selection:
+                normalized = "、".join(match_meta.get("terms") or []) or keywords
+                return f"【本地曲库检索结果】：未找到与 '{keywords}' 相关的曲目。已尝试关键词：{normalized}。请向用户说明本地缺失此类型歌曲，不要编造歌曲名或推荐互联网上的曲目。"
             
             # --- 下面发布事件的代码保持不变 ---
             playlist_data = [t.model_dump() if hasattr(t, "model_dump") else t.dict() for t in selection]
@@ -489,6 +578,9 @@ async def music_plugin_executor(payload: dict):
             })
             
             songs_str = ", ".join([f"《{t.title}》" for t in selection])
+            match_source = match_meta.get("match_source")
+            if match_source and match_source != "random":
+                return f"已根据{match_source}匹配为你生成临时歌单：{songs_str}，并在右侧面板开始播放。"
             return f"已为你生成临时歌单：{songs_str}，并在右侧面板开始播放。"
 
     return f"Music Agent 暂不支持指令: {func_name}"

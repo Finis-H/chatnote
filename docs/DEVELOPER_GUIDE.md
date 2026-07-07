@@ -137,7 +137,7 @@ npm run preview
 
 - [../README.md](../README.md)：项目门面和读者导航。
 - [PRODUCT.md](PRODUCT.md)：产品定位、当前能力、产品化改版边界和 Roadmap。
-- [PRODUCT_CASE.md](PRODUCT_CASE.md)：面向 AI 产品经理面试的作品集案例。
+- [PRODUCT_CASE.md](PRODUCT_CASE.md)：面向初次接触者的作品集案例。
 - [EVAL_REPORT.md](EVAL_REPORT.md)：AI 产品质量评估占位文档。
 - [ROADMAP.md](ROADMAP.md)：产品演进路线占位文档。
 - [ARCHITECTURE.md](ARCHITECTURE.md)：系统架构占位文档。

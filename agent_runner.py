@@ -124,7 +124,7 @@ async def spawn_temp_agent_task(payload: dict, main_loop: asyncio.AbstractEventL
         result = await asyncio.wait_for(
             main_loop.run_in_executor(
                 temp_ai_executor,
-                _sync_real_brain_kickoff,
+                _sync_inference_call,
                 payload,
                 temp_runtime
             ),
