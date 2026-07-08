@@ -434,6 +434,32 @@ class MemoryRepository:
         cursor = int(self._get_meta(session, "last_buffer_cursor", "0") or 0)
         return [item for item in self._read_buffer_records() if int(item.get("_cursor", 0)) > cursor]
 
+    def get_sync_status(self):
+        self.settle_expired_pending()
+        with Session(self.engine) as session:
+            records = self.get_unprocessed_buffer_records(session)
+            pending_count = len(session.exec(select(StagedEvent).where(StagedEvent.status == "PENDING")).all())
+            last_record = records[-1] if records else None
+            last_sync_time = self._get_meta(session, "last_settlement_time", "")
+            if records:
+                headline = f"已接收 {len(records)} 条记忆线索，等待同步。"
+                state = "waiting"
+            elif pending_count:
+                headline = f"有 {pending_count} 条记忆等待确认。"
+                state = "review"
+            else:
+                headline = "记忆流程空闲。"
+                state = "idle"
+            return {
+                "state": state,
+                "headline": headline,
+                "queued_count": len(records),
+                "pending_count": pending_count,
+                "latest_text": (last_record or {}).get("text", ""),
+                "latest_at": (last_record or {}).get("created_at", ""),
+                "last_sync_at": last_sync_time,
+            }
+
     def _buffer_should_flush(self, records, force=False):
         if force:
             return bool(records)
@@ -1303,6 +1329,10 @@ class MemoryGatekeeper:
 
     def fetch_memory(self):
         return self.repo.fetch_memory_items()
+
+    def get_memory_sync_status(self):
+        with self.memory_lock:
+            return self.repo.get_sync_status()
 
     def get_boss_profile(self):
         return self.repo.get_profile("Boss")

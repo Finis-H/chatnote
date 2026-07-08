@@ -73,7 +73,11 @@ async def spawn_agent_task(raw_data: str, main_loop: asyncio.AbstractEventLoop, 
             "type": "SYSTEM_STATE_CHANGED",
             "memory_pending_count": len([m for m in memory_items if m.get("status") == "PENDING"])
         })
-        await event_bus.publish({"type": "memory_data", "content": memory_items})
+        await event_bus.publish({
+            "type": "memory_data",
+            "content": memory_items,
+            "meta": vault_os.gatekeeper.get_memory_sync_status(),
+        })
             
     except asyncio.TimeoutError:
         result = "任务执行时间超过 60 秒，系统已结束本轮前端等待。后台若稍后返回，将不会阻塞当前界面。"

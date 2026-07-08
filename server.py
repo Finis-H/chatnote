@@ -106,6 +106,15 @@ print(" 正在初始化大模型客户端和向量引擎...")
 vault_os = VaultOS_Terminal()
 
 
+def memory_data_payload():
+    items = vault_os.gatekeeper.fetch_memory()
+    return {
+        "type": "memory_data",
+        "content": items,
+        "meta": vault_os.gatekeeper.get_memory_sync_status(),
+    }
+
+
 class SessionManager:
     def __init__(self, main_app):
         self.main_app = main_app
@@ -349,9 +358,9 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 
             elif cmd_type == "fetch_memory":
                 try:
-                    await websocket.send_json({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
+                    await websocket.send_json(memory_data_payload())
                 except Exception:
-                    await websocket.send_json({"type": "memory_data", "content": []})
+                    await websocket.send_json({"type": "memory_data", "content": [], "meta": {}})
                 await websocket.send_json({"type": "profile_import_state", "content": vault_os.get_profile_import_state()})
             elif cmd_type == "resolve_memory_conflict":
                 result = await asyncio.to_thread(
@@ -363,9 +372,9 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                 await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
                 await event_bus.publish({"type": "profile_import_state", "content": vault_os.get_profile_import_state()})
                 try:
-                    await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
+                    await event_bus.publish(memory_data_payload())
                 except Exception:
-                    await event_bus.publish({"type": "memory_data", "content": []})
+                    await event_bus.publish({"type": "memory_data", "content": [], "meta": {}})
             # VPM 插件列表刷新指令
             elif cmd_type == "fetch_plugins":
                 plugins_info = []
@@ -440,7 +449,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                     await event_bus.publish({"type": "system_toast", "content": result})
                     await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
                     try:
-                        await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
+                        await event_bus.publish(memory_data_payload())
                     except Exception: pass
                 asyncio.create_task(run_surgery())
 
@@ -451,7 +460,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                     await event_bus.publish({"type": "profile_import_state", "content": vault_os.get_profile_import_state()})
                     await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
                     try:
-                        await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
+                        await event_bus.publish(memory_data_payload())
                     except Exception: pass
                 asyncio.create_task(run_import())
 
@@ -477,7 +486,7 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                     await event_bus.publish({"type": "system_toast", "content": result.get("message", "")})
                     await event_bus.publish({"type": "SYSTEM_STATE_CHANGED", "memory_pending_count": len([m for m in vault_os.gatekeeper.fetch_memory() if m.get("status") == "PENDING"])})
                     try:
-                        await event_bus.publish({"type": "memory_data", "content": vault_os.gatekeeper.fetch_memory()})
+                        await event_bus.publish(memory_data_payload())
                     except Exception: pass
                 asyncio.create_task(run_commit_import())
 

@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import PageFrame from '../components/PageFrame.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
-import { pendingMemory, pendingCount, memoryFilter, resolveMemoryConflict } from '../composables/useNeuroLink';
+import { pendingMemory, pendingCount, memoryFilter, memorySyncMeta, resolveMemoryConflict } from '../composables/useNeuroLink';
 
 const memoryFilterOptions = computed(() => [
   { label: '全局视野', value: 'all' },
@@ -30,7 +30,20 @@ const displayMemory = computed(() => {
   });
 });
 
-function formatExpireTime(isoString) { return new Date(isoString).toLocaleString(); }
+const memoryStatusRows = computed(() => [
+  { label: '已接收线索', value: memorySyncMeta.value.queued_count || 0 },
+  { label: '待确认', value: memorySyncMeta.value.pending_count ?? pendingCount.value },
+  { label: '上次同步', value: formatOptionalTime(memorySyncMeta.value.last_sync_at) }
+]);
+
+function formatOptionalTime(isoString) {
+  if (!isoString) return '暂无';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '暂无';
+  return date.toLocaleString();
+}
+
+function formatExpireTime(isoString) { return formatOptionalTime(isoString); }
 
 function displayTrait(mem) {
   const trait = String(mem?.new_trait || mem?.context || '').trim();
@@ -47,6 +60,22 @@ function displayTrait(mem) {
     title="🧠 记忆事件同步"
     subtitle="在此处理低置信度、关系变更、手动记忆更新和冲突候选。待审项未处理满 3 天后，将自动采纳并生效。"
   >
+    <section class="memory-status-panel" :class="`status-${memorySyncMeta.state || 'idle'}`" aria-label="记忆同步状态">
+      <div class="status-copy">
+        <div class="status-kicker">记忆流程</div>
+        <div class="status-headline">{{ memorySyncMeta.headline || '记忆流程空闲。' }}</div>
+        <div v-if="memorySyncMeta.latest_text" class="latest-memory">
+          最近线索：{{ memorySyncMeta.latest_text }}
+        </div>
+      </div>
+      <div class="status-metrics">
+        <div v-for="row in memoryStatusRows" :key="row.label" class="status-metric">
+          <span class="metric-label">{{ row.label }}</span>
+          <strong class="metric-value">{{ row.value }}</strong>
+        </div>
+      </div>
+    </section>
+
     <div class="search-console">
       <SegmentedControl v-model="memoryFilter" :options="memoryFilterOptions" />
     </div>
@@ -80,6 +109,18 @@ function displayTrait(mem) {
 </template>
 
 <style scoped>
+.memory-status-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-xl); align-items: stretch; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-left: 4px solid var(--border-strong); border-radius: var(--radius-md); padding: var(--space-lg); }
+.memory-status-panel.status-waiting { border-left-color: var(--warning); }
+.memory-status-panel.status-review { border-left-color: var(--danger); }
+.memory-status-panel.status-idle { border-left-color: var(--accent); }
+.status-copy { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-xs); }
+.status-kicker { color: var(--text-disabled); font-family: var(--font-mono); font-size: 11px; }
+.status-headline { color: var(--text-primary); font-size: 15px; line-height: 1.45; }
+.latest-memory { color: var(--text-muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.status-metrics { display: grid; grid-template-columns: repeat(3, minmax(88px, 1fr)); gap: var(--space-sm); min-width: 330px; }
+.status-metric { background: var(--bg-field-muted); border: 1px solid var(--border-muted); border-radius: var(--radius-xs); padding: var(--space-sm); min-width: 0; }
+.metric-label { display: block; color: var(--text-disabled); font-family: var(--font-mono); font-size: 11px; margin-bottom: var(--space-xs); }
+.metric-value { display: block; color: var(--text-secondary); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
 .search-console { display: flex; gap: var(--space-lg); margin-bottom: var(--space-lg); align-items: center; }
 .empty-state { color: var(--text-disabled); font-family: var(--font-mono); margin-top: var(--space-xl); }
 .memory-grid { display: flex; flex-direction: column; gap: var(--space-lg); }
@@ -107,4 +148,11 @@ function displayTrait(mem) {
 .decision-btn.accept { border-color: var(--accent-border); color: var(--accent); }
 .decision-btn.reject { border-color: var(--danger-border); color: var(--danger); }
 .decision-btn:hover { background: var(--bg-hover-strong); }
+@media (max-width: 860px) {
+  .memory-status-panel { grid-template-columns: 1fr; }
+  .status-metrics { min-width: 0; }
+}
+@media (max-width: 560px) {
+  .status-metrics { grid-template-columns: 1fr; }
+}
 </style>

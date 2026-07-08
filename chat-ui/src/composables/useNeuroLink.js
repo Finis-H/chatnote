@@ -65,6 +65,15 @@ export const tempMessages = ref([]);
 export const noteThreads = ref({});
 export const currentNote = ref({ id: null, title: '', content: '', file_path: '' });
 export const pendingMemory = ref([]);
+export const memorySyncMeta = ref({
+  state: 'idle',
+  headline: '记忆流程空闲。',
+  queued_count: 0,
+  pending_count: 0,
+  latest_text: '',
+  latest_at: '',
+  last_sync_at: ''
+});
 export const mainIsThinking = ref(false);
 export const tempIsThinking = ref(false);
 export const tempSessionId = ref('');
@@ -399,6 +408,7 @@ export function useNeuroLink() {
   registerVpmContext({
     SystemConfig, sysConfig, activeView, previousView, newsList, favoritesList,
     pluginsList, globalMessages, noteThreads, currentNote, pendingMemory,
+    memorySyncMeta,
     isThinking, userInput, systemToast, inputError, isImmersive,
     activeAgentComponent, activeAgentDock, activeAgentDockItems, deleteModal, pluginPermissionRequest, respondPluginPermission, isImporting, importFile,
     PROFILE_IMPORT_MAX_CHARS, profileImportSessionId, profileImportPreview,
@@ -542,7 +552,11 @@ export function useNeuroLink() {
             targetList.push({ role: 'ai', content: data.content });
           }
         }
-        else if (data.type === 'memory_data') pendingMemory.value = data.content;
+        else if (data.type === 'memory_data') {
+          if (Array.isArray(data.content)) pendingMemory.value = data.content;
+          else if (Array.isArray(data.content?.items)) pendingMemory.value = data.content.items;
+          memorySyncMeta.value = data.meta || data.content?.meta || memorySyncMeta.value;
+        }
         else if (data.type === 'SYSTEM_STATE_CHANGED') {
           sendWsCommand({ type: "fetch_memory" });
         }
