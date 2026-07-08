@@ -8,6 +8,7 @@ import shutil
 import zipfile
 import re
 import asyncio
+from difflib import SequenceMatcher
 
 from core_bus import event_bus
 from openai import OpenAI
@@ -83,6 +84,25 @@ def _music_track_field(track, field_name: str) -> str:
     return str(getattr(track, field_name, "") or "").lower()
 
 
+def _split_artist_names(artist: str) -> list[str]:
+    names = re.split(r"[、,，/&\s]+", artist or "")
+    compact_artist = _compact_music_query(artist)
+    compact_names = [_compact_music_query(name) for name in names]
+    return [name for name in [compact_artist, *compact_names] if name]
+
+
+def _is_fuzzy_artist_match(term: str, artist: str) -> bool:
+    compact_term = _compact_music_query(term)
+    if len(compact_term) < 3:
+        return False
+    for name in _split_artist_names(artist):
+        if compact_term in name or name in compact_term:
+            return True
+        if SequenceMatcher(None, compact_term, name).ratio() >= 0.72:
+            return True
+    return False
+
+
 def _score_music_track(track, terms: list[str]) -> tuple[int, list[str]]:
     score = 0
     reasons = []
@@ -98,6 +118,10 @@ def _score_music_track(track, terms: list[str]) -> tuple[int, list[str]]:
             field_value = _music_track_field(track, field_name)
             if term and term in field_value:
                 score += weight
+                if label not in reasons:
+                    reasons.append(label)
+            elif field_name == "artist" and _is_fuzzy_artist_match(term, field_value):
+                score += 60
                 if label not in reasons:
                     reasons.append(label)
     return score, reasons

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick, onMounted } from 'vue';
 import {
   globalMessages,
   tempMessages,
@@ -13,11 +13,20 @@ import {
   toggleTracePanel,
   useNeuroLink
 } from '../composables/useNeuroLink';
+import { useScrollAffordance } from '../composables/useScrollAffordance';
 import CyberMarkdown from '../components/CyberMarkdown.vue';
+import ScrollEdgeButton from '../components/ScrollEdgeButton.vue';
 
 const viewportRef = ref(null);
 const manuallyExpandedSpans = ref(new Set());
 const { endTempSession } = useNeuroLink();
+const hasNewerMessages = ref(false);
+const {
+  canScrollDown,
+  isNearBottom,
+  scrollToBottom,
+  refreshScrollState
+} = useScrollAffordance(viewportRef, { threshold: 36 });
 // 视觉切片状态：1 轮对话 = 1个User + 1个AI，6轮就是 12 条消息
 const PAGE_SIZE = 12; 
 const displayLimit = ref(PAGE_SIZE);
@@ -106,22 +115,48 @@ function toggleTraceNode(event) {
   manuallyExpandedSpans.value = next;
 }
 const scrollViewport = () => { if (viewportRef.value) viewportRef.value.scrollTop = viewportRef.value.scrollHeight; };
+const scrollViewportAfterRender = () => {
+  nextTick(() => {
+    scrollViewport();
+    requestAnimationFrame(() => {
+      scrollViewport();
+      refreshScrollState();
+    });
+    refreshScrollState();
+  });
+};
+const clearNewerMessagesIfAtBottom = (container = viewportRef.value) => {
+  if (!container) return;
+  const bottomGap = container.scrollHeight - container.clientHeight - container.scrollTop;
+  if (bottomGap <= 36) hasNewerMessages.value = false;
+};
+const jumpToLatestMessage = () => {
+  hasNewerMessages.value = false;
+  scrollToBottom('smooth');
+};
+onMounted(scrollViewportAfterRender);
 // 监听正常对话的新消息触底
 watch([globalMessages, tempMessages, isThinking], () => {
   // 如果当前正在往上翻看历史，不要强行把用户拽到底部
-  if (!isFetchingMore) {
-    nextTick(scrollViewport);
+  if (isFetchingMore) return;
+  if (isNearBottom.value) {
+    scrollViewportAfterRender();
+  } else {
+    hasNewerMessages.value = true;
+    nextTick(refreshScrollState);
   }
 }, { deep: true });
 // 监听视图切换时的置底
 watch(activeView, (newVal) => {
   if (newVal === 'chat' || newVal === 'temp_chat') {
-    nextTick(scrollViewport);
+    hasNewerMessages.value = false;
+    scrollViewportAfterRender();
   }
 });
 // 上滑加载更多逻辑
 const handleScroll = async (e) => {
   const container = e.target;
+  clearNewerMessagesIfAtBottom(container);
   // 触发条件：滚动到顶部，且还有未展示的历史数据
   const sourceMessages = isTempSession.value ? tempMessages.value : globalMessages.value;
   if (container.scrollTop === 0 && displayLimit.value < sourceMessages.length) {
@@ -135,6 +170,7 @@ const handleScroll = async (e) => {
     // 4. 高度补偿：把滚动条推回到用户刚才看的位置，实现无缝加载
     const newHeight = container.scrollHeight;
     container.scrollTop = newHeight - previousHeight;
+    refreshScrollState();
     // 稍微延迟释放防抖锁，防止连续触发
     setTimeout(() => { isFetchingMore = false; }, 100);
   }
@@ -198,7 +234,8 @@ const handleScroll = async (e) => {
       </div>
     </section>
 
-    <div class="scroll-container" ref="viewportRef" @scroll="handleScroll">
+    <div class="terminal-scroll-area">
+      <div class="scroll-container" ref="viewportRef" @scroll="handleScroll">
       
       <div v-if="!isTempSession && displayLimit >= globalMessages.length && globalMessages.length > 0" class="history-end">
         —— 已追溯至记忆链路的尽头 ——
@@ -211,6 +248,13 @@ const handleScroll = async (e) => {
         <CyberMarkdown v-if="m.displayContent" :text="m.displayContent" />
       </div>
       <div v-if="isThinking" class="thinking-cursor">正在生成回复...</div>
+      </div>
+      <ScrollEdgeButton
+        v-if="canScrollDown || hasNewerMessages"
+        :active="hasNewerMessages"
+        label="Scroll to latest"
+        @click="jumpToLatestMessage"
+      />
     </div>
   </div>
 </template>
@@ -255,6 +299,7 @@ const handleScroll = async (e) => {
 .status-degraded .trace-message { color: var(--warning-strong); }
 .trace-row.muted { color: var(--text-disabled); }
 .trace-row.muted .trace-message, .trace-row.muted .trace-code { color: var(--text-disabled); }
+.terminal-scroll-area { position: relative; flex: 1; min-height: 0; display: flex; }
 .scroll-container { padding: var(--space-3xl); display: flex; flex-direction: column; gap: var(--space-xl); flex: 1; min-height: 0; overflow-y: auto; scroll-behavior: smooth; }
 .scroll-container::-webkit-scrollbar { width: 6px; }
 .scroll-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-xs); }

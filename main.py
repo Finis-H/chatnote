@@ -63,6 +63,14 @@ PROFILE_IMPORT_MAX_CHARS = 9000
 MUSIC_PLAY_INTENT_PATTERN = re.compile(
     r"(放歌|听歌|打碟|播放.*(歌|歌曲|音乐)|放.*(歌|歌曲|音乐)|来点.*(歌|歌曲|音乐)|听.*(歌|歌曲|音乐))"
 )
+MUSIC_QUERY_PREFIXES = [
+    "请帮我", "帮我", "给我", "我想", "想要", "想听", "我要", "来点", "来首",
+    "播放一首", "播放首", "播放", "放一首", "放首", "放点", "放", "听一首", "听首", "听",
+]
+MUSIC_QUERY_SUFFIXES = [
+    "类型的歌曲", "类型音乐", "类型的歌", "歌曲听", "音乐听", "的歌曲", "的音乐", "的歌",
+    "歌曲", "音乐", "歌",
+]
 
 #  运行时路径审计器 (Audit Hook)
 def path_sniffer(event, args):
@@ -747,6 +755,7 @@ class VaultOS_Terminal:
         has_music_tool = any(t.get("function", {}).get("name") == "play_music_playlist" for t in tools)
         if not has_music_tool:
             return None
+        keywords = self._extract_music_fallback_keywords(text)
         return {
             "plan_status": "READY",
             "missing_capabilities": [],
@@ -756,12 +765,27 @@ class VaultOS_Terminal:
                 {
                     "step_id": "s1",
                     "tool_name": "play_music_playlist",
-                    "args": {"keywords": ""},
+                    "args": {"keywords": keywords},
                     "output_to_blackboard": "music_result",
                 }
             ],
             "reasoning": "JIT 编译器超时，本地兜底识别到明确音乐播放意图。",
         }
+
+    def _extract_music_fallback_keywords(self, user_input: str) -> str:
+        text = "".join(re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", str(user_input or "").lower()))
+        changed = True
+        while changed and text:
+            changed = False
+            for prefix in MUSIC_QUERY_PREFIXES:
+                if text.startswith(prefix):
+                    text = text[len(prefix):]
+                    changed = True
+            for suffix in MUSIC_QUERY_SUFFIXES:
+                if text.endswith(suffix):
+                    text = text[:-len(suffix)]
+                    changed = True
+        return text
 
     def _compile_jit_task(self, user_input: str, prefetch_context: str = "") -> dict:
         print(" [JIT 编译器] 正在为复杂任务绘制动态执行蓝图...")
