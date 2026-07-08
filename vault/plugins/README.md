@@ -2,7 +2,7 @@
 
 本文档面向第三方开发者，用于在 `vault/plugins/` 下开发 Vault OS 插件。VPM v2 的基本原则是：插件负责自己的领域逻辑、界面和数据切片；主系统负责工具调度、路由挂载、UI 加载、向量写入/更新/删除和卸载边界控制。
 
-插件目录名就是系统识别用的 `plugin_id`。例如目录 `vault/plugins/music_agent/` 的 `plugin_id` 是 `music_agent`。
+插件目录名就是系统识别用的 `plugin_id`。例如目录 `vault/plugins/music_agent/` 的 `plugin_id` 是 `music_agent`。`manifest.json` 应显式声明同名 `plugin_id`；旧插件缺失时主系统会按目录名兼容注入，但新插件应视为契约不完整。若 `manifest.plugin_id` 与目录名不一致，主系统应隔离该插件。
 
 > 重要：运行中新增插件目录后，插件中心可以扫描到 `manifest.json`，但后端路由和工具注册通常需要重启或重新初始化后才会生效。不要把“放入目录”理解为所有能力立刻可调用。
 
@@ -42,6 +42,7 @@ vault/plugins/your_agent/
 
 ```json
 {
+  "plugin_id": "your_agent",
   "name": "your_agent",
   "version": "2.0.0",
   "author": "Developer Name",
@@ -77,6 +78,7 @@ vault/plugins/your_agent/
 字段说明：
 
 - `name`：展示名称，建议与目录名保持一致。
+- `plugin_id`：插件身份标识，必须与插件目录名一致。
 - `version`：插件版本，建议使用语义化版本。
 - `author`：作者名称。
 - `description`：插件中心展示文案。
@@ -282,6 +284,7 @@ VPM v2 的 RAG 边界如下：
 - 主系统只负责向量层面的写入、更新、删除，不替插件设计切片方式。
 - 插件不得绕过主系统改动本地向量存储。
 - 主系统只接受归属于该插件的来源，并且只影响该插件名下、该插件来源路径下的向量内容。
+- 插件查询自己生产的 RAG 时必须走主系统标准插件接口，不要直接访问 ChromaDB 文件或全局向量对象。
 
 建议插件把可追踪来源文件放在：
 
@@ -317,6 +320,33 @@ vault/plugins/{plugin_id}/knowledge/
 - 空 `payload` 表示请求主系统删除该来源对应的向量记录。
 - 插件卸载时，向量清理由主系统按 `plugin_id` 和插件私有来源路径执行。
 
+### 插件私有 RAG 查询
+
+插件可以通过标准接口查询自己生产的 RAG 内容：
+
+```http
+POST /api/plugins/{plugin_id}/rag/search
+```
+
+请求示例：
+
+```json
+{
+  "query": "领域内检索短语",
+  "top_k": 5,
+  "domain": "your_domain"
+}
+```
+
+主系统必须强制过滤：
+
+- 来源路径必须位于 `vault/plugins/{plugin_id}/` 下。
+- 如果 metadata 中存在 `plugin_id`，必须等于当前插件目录名。
+- 如果请求传入 `domain`，只返回同 domain 的插件知识。
+- 返回结果只包含必要 metadata，不暴露其他插件或主系统资料。
+
+插件不得调用全局 `search_local_knowledge` 来读取其他插件、聊天历史、画像记忆或主系统资料。
+
 ## 六、卸载与安全边界
 
 插件卸载必须遵守以下规则：
@@ -327,6 +357,13 @@ vault/plugins/{plugin_id}/knowledge/
 - 不允许删除或改写其他插件目录。
 - 不允许操作主系统核心表、聊天历史、画像记忆、全局配置和其他共享运行时文件。
 - 插件产生的 RAG 向量由主系统根据插件归属清理，插件不要自行处理底层向量存储。
+
+插件可以管理自己的领域数据和私有文件，但必须经过主系统安全边界：
+
+- 单条新增、单条更新、单个明确路径文件删除通常可直接执行并记录审计。
+- 高频操作、超过阈值的批量新增/删除/更新、批量重建 RAG、大体量导出或写入必须先请求用户确认。
+- 推荐阈值：一次影响超过 10 个对象、60 秒内超过 20 次写入/删除、单次影响数据超过 100MB，均视为高风险。
+- 高风险操作应通过主系统插件权限确认流程展示插件、动作、影响数量、路径预览、风险说明和是否可撤销。
 
 推荐命名规则：
 
@@ -373,6 +410,7 @@ Vault OS 对第三方插件采用默认拒绝策略。除主系统硬编码 allo
 发布插件前，请至少检查：
 
 - `manifest.json` 是合法 JSON。
+- `manifest.json` 显式声明 `plugin_id`，且与目录名一致。
 - `function.name` 全局唯一。
 - `execution.endpoint` 与 `api.py` 路由一致。
 - 如果使用 `payload_format`，后端能正确接收包装后的结构。

@@ -117,7 +117,7 @@ class VaultVectorDB:
         self.collection.upsert(documents=texts, metadatas=metadatas, ids=ids)
         print(" [RAG] Upsert complete.")
 
-    def search(self, query, top_k=3):
+    def search(self, query, top_k=3, where=None):
         if not self.is_ready():
             raise RuntimeError(
                 "MISSING_EMBED_API_KEY: Please configure Embedding API Key in Settings before searching local knowledge."
@@ -126,17 +126,22 @@ class VaultVectorDB:
             self.collection = self._get_collection()
 
         print(f" [RAG] Searching local knowledge for: {query}")
-        results = self.collection.query(query_texts=[query], n_results=top_k)
+        query_args = {"query_texts": [query], "n_results": top_k}
+        if where:
+            query_args["where"] = where
+        results = self.collection.query(**query_args)
         formatted_results = []
         if results["documents"] and results["documents"][0]:
             for i in range(len(results["documents"][0])):
                 distance = results["distances"][0][i] if "distances" in results and results["distances"] else 1.0
                 score = max(0, round(1.0 - distance, 2))
+                metadata = results["metadatas"][0][i] if results.get("metadatas") and results["metadatas"][0] else {}
                 formatted_results.append(
                     {
                         "score": score,
                         "content": results["documents"][0][i],
-                        "source": results["metadatas"][0][i]["source"],
+                        "source": metadata.get("source", ""),
+                        "metadata": metadata,
                     }
                 )
         return formatted_results

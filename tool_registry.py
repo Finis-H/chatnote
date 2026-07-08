@@ -142,6 +142,11 @@ class ToolRegistry:
 
                     plugin_id = self._plugin_id_from_path(filepath)
                     if plugin_id:
+                        declared_plugin_id = manifest.get("plugin_id")
+                        if declared_plugin_id and declared_plugin_id != plugin_id:
+                            print(f"⚠️ [警告] 插件 {plugin_id} 的 manifest.plugin_id 不匹配: {declared_plugin_id}。已隔离。")
+                            self.system_warnings.append(f"插件契约异常：'{plugin_id}' 的 plugin_id 与目录名不一致。")
+                            continue
                         manifest["plugin_id"] = plugin_id
                     normalize_manifest_security(manifest, plugin_id)
 

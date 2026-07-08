@@ -1,4 +1,5 @@
 {
+  "plugin_id": "music_agent",
   "name": "music_agent",
   "version": "2.0.0",
   "author": "Vault Core",

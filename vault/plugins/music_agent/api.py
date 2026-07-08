@@ -7,6 +7,7 @@ import time
 import shutil
 import zipfile
 import re
+import asyncio
 
 from core_bus import event_bus
 from openai import OpenAI
@@ -15,6 +16,7 @@ from fastapi.responses import FileResponse
 from sqlmodel import SQLModel, Field, Session, select
 from typing import Optional, List
 from main import VAULT_ROOT
+from plugin_security import PLUGIN_ROUTE_INTERNAL_HEADER, plugin_security_manager
 
 # 1. 纯净版物理表模型 (彻底移除 mood，扩容多模态字段)
 class MusicTrack(SQLModel, table=True):
@@ -132,6 +134,59 @@ COVERS_DIR = os.path.join(CURRENT_DIR, "covers")
 AUDIO_DIR = os.path.join(CURRENT_DIR, "audio")
 KNOWLEDGE_DIR = os.path.join(CURRENT_DIR, "knowledge")
 
+
+def _require_music_mutation(action, targets=None, estimated_count=1, estimated_bytes=0, reason=""):
+    result = plugin_security_manager.preflight_plugin_mutation(
+        "music_agent",
+        action,
+        targets=targets or [],
+        estimated_count=estimated_count,
+        estimated_bytes=estimated_bytes,
+        reason=reason,
+    )
+    if not result.get("allowed"):
+        raise HTTPException(status_code=403, detail=result.get("message", "插件操作需要授权。"))
+    return result
+
+
+async def _require_music_mutation_async(action, targets=None, estimated_count=1, estimated_bytes=0, reason=""):
+    return await asyncio.to_thread(
+        _require_music_mutation,
+        action,
+        targets or [],
+        estimated_count,
+        estimated_bytes,
+        reason,
+    )
+
+
+def _server_base_url():
+    actual_port = "8000"
+    port_path = os.path.join(VAULT_ROOT, ".server_port")
+    if os.path.exists(port_path):
+        with open(port_path, "r", encoding="utf-8") as pf:
+            actual_port = pf.read().strip()
+    return f"http://127.0.0.1:{actual_port}"
+
+
+async def _search_music_private_rag(query: str, top_k: int = 10):
+    if not query or not query.strip():
+        return []
+    url = f"{_server_base_url()}/api/plugins/music_agent/rag/search"
+    headers = {PLUGIN_ROUTE_INTERNAL_HEADER: plugin_security_manager.internal_token}
+    payload = {"query": query, "top_k": top_k, "domain": "music"}
+    try:
+        resp = await asyncio.to_thread(requests.post, url, json=payload, headers=headers, timeout=5)
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+        if data.get("status") != "success":
+            return []
+        return data.get("results") or []
+    except Exception as e:
+        print(f" [Music Agent] 私有 RAG 检索失败: {e}")
+        return []
+
 def init_plugin(app_engine):
     global engine
     engine = app_engine
@@ -193,6 +248,7 @@ async def add_music_track(
     audio_file: UploadFile = File(...) 
 ):
     if not engine: raise HTTPException(status_code=500, detail="引擎未初始化")
+    await _require_music_mutation_async("create_track", estimated_count=1, reason="新增单个音乐资产。")
 
     title = title.replace('"', "'")[:50]
     artist = artist.replace('"', "'")[:50]
@@ -286,6 +342,7 @@ async def delete_music_track(url: str):
         track = session.exec(select(MusicTrack).where(MusicTrack.url == url)).first()
         if not track:
             raise HTTPException(status_code=404, detail="未找到该曲目")
+        await _require_music_mutation_async("delete_track", targets=[track.url], estimated_count=1, reason="删除单个音乐资产及其私有文件。")
 
         # --- 1. 删除本地封面图 ---
         if track.cover_url:
@@ -462,7 +519,9 @@ def agent_analyze_lyrics(url: str, lyrics: str, md_file_path: str):
                 {
                     "chunk_text": combined_text,
                     "metadata": {
+                        "plugin_id": "music_agent",
                         "domain": "music",
+                        "source_type": "plugin_knowledge",
                         "artist": track_artist,
                         "url": url
                     }
@@ -508,6 +567,7 @@ async def update_music_track(
     cover_file: UploadFile = File(None)
 ):
     if not engine: raise HTTPException(status_code=500, detail="引擎未初始化")
+    await _require_music_mutation_async("update_track", targets=[url], estimated_count=1, reason="更新单个音乐资产元数据。")
     
     tags_list = [t.strip() for t in tagsInput.split(',') if t.strip()]
     tags_raw = ",".join(tags_list)
@@ -564,6 +624,21 @@ async def music_plugin_executor(payload: dict):
             
             selection, match_meta = select_music_tracks(valid_tracks, keywords, limit=limit)
             if keywords and keywords.strip() and not selection:
+                tracks_by_url = {track.url: track for track in valid_tracks}
+                rag_results = await _search_music_private_rag(keywords, top_k=limit)
+                rag_selection = []
+                for item in rag_results:
+                    track_url = (item.get("metadata") or {}).get("url")
+                    if track_url in tracks_by_url and tracks_by_url[track_url] not in rag_selection:
+                        rag_selection.append(tracks_by_url[track_url])
+                if rag_selection:
+                    selection = rag_selection[:limit]
+                    match_meta = {
+                        "terms": match_meta.get("terms") or [keywords],
+                        "match_source": "私有RAG",
+                        "candidate_count": len(rag_selection),
+                    }
+            if keywords and keywords.strip() and not selection:
                 normalized = "、".join(match_meta.get("terms") or []) or keywords
                 return f"【本地曲库检索结果】：未找到与 '{keywords}' 相关的曲目。已尝试关键词：{normalized}。请向用户说明本地缺失此类型歌曲，不要编造歌曲名或推荐互联网上的曲目。"
             
@@ -598,6 +673,18 @@ async def export_music_assets():
     
     with Session(engine) as session:
         tracks = session.exec(select(MusicTrack)).all()
+        estimated_bytes = 0
+        for track in tracks:
+            if track.url:
+                audio_path = os.path.join(AUDIO_DIR, track.url.split("/")[-1])
+                if os.path.exists(audio_path):
+                    estimated_bytes += os.path.getsize(audio_path)
+        await _require_music_mutation_async(
+            "export_assets",
+            estimated_count=len(tracks),
+            estimated_bytes=estimated_bytes,
+            reason="导出音乐插件私有资产备份。",
+        )
         
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             for track in tracks:

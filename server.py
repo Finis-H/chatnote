@@ -183,11 +183,74 @@ async def api_rag_ingest(request: Request):
             metadata_plugin_id = metadata.get("plugin_id")
             if metadata_plugin_id and metadata_plugin_id != source_plugin_id:
                 return {"status": "error", "message": "RAG metadata.plugin_id must match the plugin source path"}
+            if source_plugin_id and not metadata_plugin_id:
+                metadata["plugin_id"] = source_plugin_id
+                chunk["metadata"] = metadata
             
         success = await asyncio.to_thread(vault_os.receive_knowledge_payload, payload_data)
         return {"status": "success"} if success else {"status": "error"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.post("/api/plugins/{plugin_id}/rag/search")
+async def api_plugin_rag_search(plugin_id: str, request: Request):
+    safe_plugin = os.path.basename(plugin_id)
+    if not safe_plugin:
+        raise HTTPException(status_code=400, detail="plugin_id required")
+    payload = await request.json()
+    query = str(payload.get("query") or "").strip()
+    if not query:
+        return {"status": "success", "plugin_id": safe_plugin, "results": []}
+    try:
+        top_k = max(1, min(int(payload.get("top_k", 5)), 20))
+    except (TypeError, ValueError):
+        top_k = 5
+    domain = str(payload.get("domain") or "").strip()
+    plugin_root = os.path.normcase(os.path.normpath(os.path.join(PLUGINS_DIR, safe_plugin)))
+
+    def belongs_to_plugin(item):
+        metadata = item.get("metadata") or {}
+        source = os.path.normcase(os.path.normpath(item.get("source") or metadata.get("source") or ""))
+        metadata_plugin_id = metadata.get("plugin_id")
+        if metadata_plugin_id and metadata_plugin_id != safe_plugin:
+            return False
+        if domain and metadata.get("domain") != domain:
+            return False
+        return bool(source and source.startswith(plugin_root))
+
+    try:
+        try:
+            raw_results = await asyncio.to_thread(
+                vault_os.vector_db.search,
+                query,
+                max(top_k * 4, 20),
+                {"plugin_id": safe_plugin},
+            )
+        except Exception as filter_error:
+            print(f" [RAG] 插件私有过滤查询降级: {filter_error}")
+            raw_results = []
+        results = [item for item in raw_results if belongs_to_plugin(item)]
+        if not results:
+            raw_results = await asyncio.to_thread(vault_os.vector_db.search, query, max(top_k * 4, 20))
+            results = [item for item in raw_results if belongs_to_plugin(item)]
+        safe_results = []
+        for item in results[:top_k]:
+            metadata = item.get("metadata") or {}
+            safe_results.append({
+                "score": item.get("score", 0),
+                "content": item.get("content", ""),
+                "source": item.get("source", ""),
+                "metadata": {
+                    "plugin_id": metadata.get("plugin_id"),
+                    "domain": metadata.get("domain"),
+                    "source_type": metadata.get("source_type"),
+                    "artist": metadata.get("artist"),
+                    "url": metadata.get("url"),
+                },
+            })
+        return {"status": "success", "plugin_id": safe_plugin, "results": safe_results}
+    except Exception as e:
+        return {"status": "error", "plugin_id": safe_plugin, "message": str(e)}
 
 @app.websocket("/ws/{client_token}")
 async def websocket_endpoint(websocket: WebSocket, client_token: str):
@@ -315,6 +378,10 @@ async def websocket_endpoint(websocket: WebSocket, client_token: str):
                             try:
                                 with open(manifest_file, 'r', encoding='utf-8') as mf:
                                     info = json.load(mf)
+                                    declared_plugin_id = info.get("plugin_id")
+                                    if declared_plugin_id and declared_plugin_id != p:
+                                        print(f" [VPM] 插件 {p} 的 plugin_id 与目录名不一致，已跳过。")
+                                        continue
                                     info['plugin_id'] = p # 将插件目录名作为唯一 ID
                                     normalize_manifest_security(info, p)
                                     info['plugin_ui_token'] = plugin_security_manager.plugin_ui_token(p)

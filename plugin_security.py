@@ -22,6 +22,7 @@ SENSITIVE_PERMISSIONS = {
     "subprocess",
     "system_config",
     "ui_commands",
+    "plugin_storage",
 }
 
 HIGH_RISK_PERMISSIONS = {"api_key", "native_backend", "subprocess", "system_config"}
@@ -139,12 +140,14 @@ class PluginSecurityManager:
         self.permissions_path = ""
         self.event_bus = None
         self.main_loop = None
+        self.main_loop_thread_id = None
         self.internal_token = ""
         self._lock = threading.RLock()
         self._pending: Dict[str, Dict[str, Any]] = {}
         self._once_grants: Dict[tuple, int] = {}
         self._session_grants: Set[tuple] = set()
         self._stored_grants = []
+        self._mutation_events: Dict[tuple, list[int]] = {}
 
     def configure(self, vault_root: str, event_bus=None, main_loop=None, internal_token: str = ""):
         self.vault_root = vault_root
@@ -158,6 +161,7 @@ class PluginSecurityManager:
     def bind_runtime(self, main_loop=None, event_bus=None):
         if main_loop is not None:
             self.main_loop = main_loop
+            self.main_loop_thread_id = threading.get_ident() if hasattr(main_loop, "call_soon_threadsafe") else None
         if event_bus is not None:
             self.event_bus = event_bus
 
@@ -383,8 +387,82 @@ class PluginSecurityManager:
             "items": items,
         }
 
+    def preflight_plugin_mutation(
+        self,
+        plugin_id: str,
+        action: str,
+        targets=None,
+        estimated_count: int = 1,
+        estimated_bytes: int = 0,
+        reason: str = "",
+        session_id: str = "main",
+    ) -> Dict[str, Any]:
+        safe_plugin_id = os.path.basename(str(plugin_id or ""))
+        if not safe_plugin_id:
+            return {"allowed": False, "reason": "missing_plugin_id", "message": "Plugin mutation requires plugin_id."}
+
+        targets = targets or []
+        target_count = max(int(estimated_count or 0), len(targets), 1)
+        now = int(time.time())
+        event_key = (session_id or "main", safe_plugin_id, str(action or "mutation"))
+        recent = [ts for ts in self._mutation_events.get(event_key, []) if now - ts <= 60]
+        recent.append(now)
+        self._mutation_events[event_key] = recent[-100:]
+
+        high_risk_actions = {"bulk_create", "bulk_delete", "bulk_update", "delete_directory", "rag_rebuild"}
+        needs_confirmation = (
+            str(action or "") in high_risk_actions
+            or target_count > 10
+            or int(estimated_bytes or 0) > 100 * 1024 * 1024
+            or len(recent) > 20
+        )
+        if not needs_confirmation:
+            return {"allowed": True, "risk": "low", "count": target_count}
+
+        manifest = {
+            "name": safe_plugin_id,
+            "plugin_id": safe_plugin_id,
+            "_plugin_id": safe_plugin_id,
+            "function": {"name": f"{safe_plugin_id}:{action or 'mutation'}"},
+            "security": {
+                "trust": "first_party" if self.is_first_party(safe_plugin_id) else "third_party",
+                "permissions": ["plugin_storage"],
+                "sensitive_reason": reason or "插件请求执行高风险私有数据或文件变更。",
+            },
+        }
+        fingerprint = manifest_fingerprint(manifest)
+        if self._has_grant(safe_plugin_id, ["plugin_storage"], fingerprint, session_id):
+            return {"allowed": True, "risk": "confirmed", "count": target_count}
+
+        decision = self._request_user_confirmation(
+            manifest,
+            ["plugin_storage"],
+            {
+                "action": action,
+                "estimated_count": target_count,
+                "estimated_bytes": estimated_bytes,
+                "targets": [redact_text(str(item)) for item in targets[:10]],
+                "reason": reason,
+            },
+            session_id,
+        )
+        if decision in {"allow_once", "allow"}:
+            self._record_once_grant(session_id, safe_plugin_id, ["plugin_storage"], fingerprint)
+            return {"allowed": True, "risk": "confirmed_once", "count": target_count}
+        if decision == "allow_session":
+            self._record_session_grant(safe_plugin_id, ["plugin_storage"], fingerprint)
+            return {"allowed": True, "risk": "confirmed_session", "count": target_count}
+        return {
+            "allowed": False,
+            "reason": "user_denied",
+            "message": f"[PLUGIN_SECURITY_BLOCKED]: User denied high-risk mutation for plugin '{safe_plugin_id}'.",
+            "count": target_count,
+        }
+
     def _request_user_confirmation(self, manifest: Dict[str, Any], permissions, args, session_id: str) -> str:
         if not self.event_bus or not self.main_loop:
+            return "deny"
+        if self.main_loop_thread_id == threading.get_ident():
             return "deny"
         request_id = f"perm_{uuid.uuid4().hex[:16]}"
         event = threading.Event()
@@ -416,6 +494,8 @@ class PluginSecurityManager:
 
     def _request_user_confirmation_batch(self, items, session_id: str) -> str:
         if not self.event_bus or not self.main_loop:
+            return "deny"
+        if self.main_loop_thread_id == threading.get_ident():
             return "deny"
         request_id = f"perm_{uuid.uuid4().hex[:16]}"
         event = threading.Event()
