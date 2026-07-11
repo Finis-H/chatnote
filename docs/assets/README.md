@@ -4,19 +4,19 @@
 
 ## Screenshot Checklist
 
-最终截图请放在 `docs/assets/screenshots/`。
+截图已存放在 `docs/assets/screenshots/`，可用于 README 和产品文档中的作品集展示。
 
 | File | Scene | Purpose | Status |
 |---|---|---|---|
-| `01-home-command-console.png` | 首页工作台，显示 Command Console | 展示本地 AI 工作台的主入口和 command-first 工作流。 | TODO |
-| `02-agent-running-trace.png` | Agent 任务运行中，显示 Trace | 展示可观测的 tool/action 执行过程和运行时状态。 | TODO |
-| `03-memory-review-permission.png` | 记忆审查或权限确认流程 | 展示谨慎的 memory 写入和审查语义。 | TODO |
-| `04-plugin-permission-danger-dialog.png` | 使用 DangerDialog 的插件权限流程 | 展示插件边界、敏感权限预览和高风险确认文案。 | TODO |
-| `05-eval-report-preview.png` | Eval Report 文档或预览状态 | 展示 AI 产品质量意识和 eval 思考。 | TODO |
+| `01-home-command-console.png` | 首页工作台，显示 Command Console | 展示本地 AI 工作台的主入口和 command-first 工作流。 | 已收录 |
+| `02-agent-running-trace.png` | Agent 任务运行中，显示 Trace | 展示可观测的 tool/action 执行过程和运行时状态。 | 已收录 |
+| `03-memory-review-permission.png` | 记忆审查或权限确认流程 | 展示谨慎的 memory 写入和审查语义。 | 已收录 |
+| `04-plugin-permission-danger-dialog.png` | 使用 DangerDialog 的插件权限流程 | 展示插件边界、敏感权限预览和高风险确认文案。 | 已收录 |
+| `05-eval-report-preview.png` | Eval Report 文档或预览状态 | 展示 AI 产品质量意识和 eval 思考。 | 已收录 |
 
 ## Capture Guidance
 
-当前仓库已有后端单元测试和前端构建脚本，但没有 Playwright、Cypress 或 Puppeteer 等专门的截图自动化工具。
+当前清单中的截图均已就位。后续补充或重新截取时，可按以下轻量流程操作；仓库已有后端单元测试和前端构建脚本，但没有 Playwright、Cypress 或 Puppeteer 等专门的截图自动化工具。
 
 建议使用轻量流程：
 
@@ -44,4 +44,4 @@ cd chat-ui
 npm run tauri -- dev
 ```
 
-在实际图片文件存在之前，不要把 TODO 截图视为已完成的作品集资产。
+新增截图时，请在本清单中补充文件名、场景、用途和状态；未实际保存的图片仍应标记为 `TODO`，不要将其视为已完成的作品集资产。
