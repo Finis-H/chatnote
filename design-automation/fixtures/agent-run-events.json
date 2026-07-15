@@ -1,0 +1,26 @@
+{
+  "fixtureType": "synthetic_websocket_agent_run",
+  "fixture_mode": "simulation",
+  "transport": "websocket",
+  "redaction": "不包含真实令牌、主机、用户内容或运行时标识符。",
+  "feature_status": {
+    "dag_preflight": "partial",
+    "sensitive_redaction": "partial",
+    "runtime_interception": "partial",
+    "untrusted_output_isolation": "partial"
+  },
+  "request": {
+    "type": "message",
+    "thread_id": "fixture-thread-control",
+    "session_mode": "main",
+    "session_id": "main",
+    "message": "总结模拟项目简报并识别风险。"
+  },
+  "events": [
+    { "type": "TRACE_EVENT", "trace_id": "trace_fixture_001", "step_code": "INTENT", "status": "RUNNING", "label": "理解任务意图", "at_ms": 0 },
+    { "type": "TRACE_EVENT", "trace_id": "trace_fixture_001", "step_code": "RAG_SEARCH", "status": "SUCCESS", "label": "检索本地知识", "duration_ms": 180 },
+    { "type": "TRACE_EVENT", "trace_id": "trace_fixture_001", "step_code": "TOOL_PLAN", "status": "RUNNING", "label": "准备受控工具计划", "at_ms": 220 },
+    { "type": "TRACE_EVENT", "trace_id": "trace_fixture_001", "step_code": "TOOL_RESULT", "status": "DEGRADED", "label": "一个可选来源不可用，继续使用现有证据", "duration_ms": 460 },
+    { "type": "TRACE_EVENT", "trace_id": "trace_fixture_001", "step_code": "RESPONSE_DONE", "status": "SUCCESS", "label": "已生成回复", "duration_ms": 720 }
+  ]
+}

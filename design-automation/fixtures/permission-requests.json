@@ -1,0 +1,42 @@
+{
+  "fixtureType": "synthetic_websocket_permission_requests",
+  "fixture_mode": "simulation",
+  "implementation_status": "planned",
+  "transport": "websocket",
+  "requestEvents": [
+    {
+      "type": "plugin_permission_request",
+      "request_id": "perm_fixture_single_001",
+      "session_id": "main",
+      "plugin_id": "research_bridge_fixture",
+      "plugin_name": "研究桥接器（模拟）",
+      "tool_name": "research_bridge_fixture:search",
+      "permissions": ["api_key", "host_info", "network"],
+      "reason": "模拟端点检索需要已声明的网络访问与检测到的敏感参数。",
+      "risk": "第三方插件输出和代码均不可信。",
+      "preview": { "query": "模拟路线图", "api_key": "******", "endpoint": "[URL_REDACTED]" }
+    },
+    {
+      "type": "plugin_permission_request",
+      "request_id": "perm_fixture_dag_001",
+      "session_id": "main",
+      "mode": "batch",
+      "risk": "该 DAG 将调用一个或多个第三方插件。",
+      "items": [
+        {
+          "plugin_id": "research_bridge_fixture",
+          "plugin_name": "研究桥接器（模拟）",
+          "tool_name": "research_bridge_fixture:search",
+          "permissions": ["api_key", "host_info", "network"],
+          "reason": "模拟 DAG 预检请求。",
+          "preview": { "api_key": "******", "endpoint": "[URL_REDACTED]" }
+        }
+      ]
+    }
+  ],
+  "responses": [
+    { "type": "plugin_permission_response", "request_id": "perm_fixture_single_001", "decision": "deny" },
+    { "type": "plugin_permission_response", "request_id": "perm_fixture_single_001", "decision": "allow_once" },
+    { "type": "plugin_permission_response", "request_id": "perm_fixture_dag_001", "decision": "allow_session" }
+  ]
+}

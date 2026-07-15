@@ -1,0 +1,30 @@
+schema_version: 2
+default_locale: zh-CN
+implementation_status:
+  implemented: { label: 已实现, show_in_product_ui: true, visual_treatment: normal }
+  partial: { label: 部分接入, show_in_product_ui: true, visual_treatment: subtle_badge }
+  planned: { label: 规划中, show_in_product_ui: true, visual_treatment: muted_readonly }
+  concept_only: { label: 设计目标, show_in_product_ui: false, show_in_handoff: true }
+state_groups:
+  connection:
+    values: [connecting, connected, reconnecting, offline]
+    source: websocket_lifecycle
+  task:
+    values: [idle, running, success, failed, needs_permission]
+  trace:
+    values: [idle, running, success, degraded, failed, timeout, aborted, blocked]
+    implementation_status: partial
+  memory:
+    values: [pending, merged, rejected, auto_overwritten]
+    implementation_status: partial
+  permission:
+    values: [not_required, pending, granted_once, granted_session, denied, blocked_undeclared]
+    implementation_status: planned
+  plugin:
+    values: [idle, running, success, failed, needs_permission]
+    implementation_status: partial
+presentation_rules:
+  - needs_permission 不得与 success 或 running 混淆。
+  - pending 记忆候选项不得显示为已合并。
+  - failed、degraded、timeout 与 blocked 必须使用不同标签。
+  - planned 不得出现保存成功、已启用或真实授权生效等可用性暗示。

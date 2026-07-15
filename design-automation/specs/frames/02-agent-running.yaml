@@ -1,0 +1,36 @@
+id: frame-02-agent-running
+kind: key_frame
+canvas: { width: 1440, height: 900, unit: px }
+layout_contract: ../layout-contract.yaml
+title: Agent 执行中
+handoff:
+  annotation: Portfolio Handoff Annotation / Not product UI
+  user_goal: 跟踪当前任务的执行进度、降级风险与可观察 Trace。
+  core_information: 运行中的 message 任务、Trace 阶段、耗时、恢复说明和 WebSocket 传输。
+  primary_action: 查看运行中 Trace；可通过导航返回主控终端。
+  risk_state: 运行中；可选来源已降级，执行保障能力为部分接入。
+  design_rationale: 用可读时间线代替原始日志，帮助用户判断执行状态与结果证据。
+  required_components: [app_shell, command_console, task_status, trace_timeline, trace_step, agent_dock, connection_status]
+  states_to_show: [connected, running, success, degraded, failed, timeout, blocked]
+  frontend_codex_acceptance: Export 可区分 running/degraded/success、耗时与 WebSocket；关联 spec/fixture 可核验 message 请求和模拟事件流。
+portfolio_story: 复杂的工具使用过程应在执行时保持可观察。
+layout: { navigation_width: 248, workspace_min_width: 760, trace_panel: main_content }
+components: [app_shell, command_console, task_status, trace_timeline, trace_step, agent_dock, connection_status]
+features:
+  - { id: trace_timeline, implementation_status: partial }
+  - { id: dag_preflight, implementation_status: partial }
+  - { id: sensitive_redaction, implementation_status: partial }
+  - { id: runtime_interception, implementation_status: partial }
+  - { id: untrusted_output_isolation, implementation_status: partial }
+required_content:
+  - 由携带 message 的 WebSocket 请求发起的运行中任务。
+  - 可读的计划、检索、工具与回复阶段。
+  - 运行、成功、失败、降级、超时或阻断等状态。
+  - 至少一个阶段的耗时或结果证据。
+  - 以模拟数据或设计目标标注尚未落地的运行时能力。
+states: { connection: connected, task: running, trace: running, agent_dock: running }
+event_binding: { transport: websocket, inbound: message, outbound: event_bus_json, fixture: ../../fixtures/agent-run-events.json }
+constraints:
+  - Trace 是解释性任务时间线，不是原始日志转储。
+  - 不得将所有失败路径表述为已可观察。
+  - 不得使用 SSE 或仅轮询式加载状态。

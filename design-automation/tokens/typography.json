@@ -1,0 +1,18 @@
+{
+  "source": "chat-ui/src/assets/cyber-theme.css",
+  "fontFamily": {
+    "ui": ["Inter", "Segoe UI", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+    "mono": ["Consolas", "SFMono-Regular", "Liberation Mono", "monospace"]
+  },
+  "textStyle": {
+    "body": { "fontFamily": "ui", "fontSize": 14, "lineHeight": 1.6, "weight": 400 },
+    "label": { "fontFamily": "ui", "fontSize": 12, "lineHeight": 1.4, "weight": 600 },
+    "title": { "fontFamily": "ui", "fontSize": 20, "lineHeight": 1.25, "weight": 600 },
+    "sectionHeading": { "fontFamily": "ui", "fontSize": 24, "lineHeight": 1.25, "weight": 600 },
+    "code": { "fontFamily": "mono", "fontSize": 12, "lineHeight": 1.45, "weight": 400 }
+  },
+  "rules": {
+    "highTrustCopy": "Use concise, auditable wording for memory, permission, deletion, and configuration flows.",
+    "avoid": ["large decorative display type", "playful language in high-risk states"]
+  }
+}

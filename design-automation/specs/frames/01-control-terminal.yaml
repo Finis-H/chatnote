@@ -1,0 +1,35 @@
+id: frame-01-control-terminal
+kind: key_frame
+canvas: { width: 1440, height: 900, unit: px }
+layout_contract: ../layout-contract.yaml
+title: 主控终端
+handoff:
+  annotation: Portfolio Handoff Annotation / Not product UI
+  user_goal: 提交主会话任务，并判断本地工作台、Trace 与记忆边界的当前状态。
+  core_information: 本地主会话、WebSocket 连接、Trace 摘要与记忆边界。
+  primary_action: 执行任务（静态 export 中为 fixture-disabled）。
+  risk_state: 主会话；候选记忆须先审查，尚未写入持久状态。
+  design_rationale: 用主控终端集中呈现本地优先任务入口与可观察执行摘要。
+  required_components: [app_shell, grouped_navigation, connection_status, command_console, conversation_stream, trace_summary, agent_dock]
+  states_to_show: [connected, idle, partial_trace]
+  frontend_codex_acceptance: Export 可见 WebSocket、命令焦点、Trace 摘要和记忆边界；关联 spec/fixture 可核验 1440x900 与 WebSocket-only。
+portfolio_story: Vault OS 是本地优先的 AI 工作台，而不只是聊天窗口。
+session: { mode: main, memory_access: enabled, persistent_state: enabled }
+layout: { navigation_width: 248, workspace_min_width: 760, agent_dock_width: 320, trace_summary: main_terminal_top }
+components: [app_shell, grouped_navigation, connection_status, command_console, conversation_stream, trace_summary, agent_dock]
+features:
+  - { id: command_console, implementation_status: implemented }
+  - { id: websocket_status, implementation_status: implemented }
+  - { id: trace_summary, implementation_status: partial }
+required_content:
+  - 本地优先工作台定位。
+  - 不暴露端口或令牌的 WebSocket 连接状态。
+  - 主控终端顶部内嵌 Trace 摘要。
+  - 可见焦点状态的主任务输入。
+  - 左侧导航与仅承载辅助信息的右侧栏。
+states: { connection: connected, task: idle, trace: idle }
+constraints:
+  - 使用 WebSocket 交互语义，不得实现 SSE。
+  - 不显示运行令牌、实时端口、本地路径或真实用户数据。
+  - 不得出现“Required evidence”验收模块。
+  - 不新增第五个业务页面。

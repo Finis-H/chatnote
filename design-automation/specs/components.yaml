@@ -1,0 +1,87 @@
+schema_version: 2
+scope: four_key_frames_only
+implementation_status_values: [implemented, partial, planned, concept_only]
+components:
+  app_shell:
+    purpose: 承载导航、工作区、状态表面与高信任覆盖层。
+    implementation_status: implemented
+    slots: [navigation, workspace, sidebar]
+  grouped_navigation:
+    purpose: 组织执行、知识与系统工作区。
+    implementation_status: implemented
+    accessibility: { current_view_announced: true, focus_visible: true }
+  connection_status:
+    purpose: 展示 WebSocket 状态，不暴露令牌或实时端点细节。
+    implementation_status: implemented
+    states: [connecting, connected, reconnecting, offline]
+  command_console:
+    purpose: 主会话的核心任务入口。
+    implementation_status: implemented
+    accessibility: { focus_visible: true, keyboard_submit_hint: true }
+  conversation_stream:
+    purpose: 展示主会话上下文与任务回应。
+    implementation_status: implemented
+  trace_summary:
+    purpose: 在主控终端顶部解释当前任务的关键执行阶段。
+    implementation_status: partial
+  trace_timeline:
+    purpose: 以可读时间线解释任务阶段与结果。
+    implementation_status: partial
+    states: [idle, running, success, failed, degraded, timeout, blocked]
+  trace_step:
+    purpose: 展示单个阶段的状态、耗时、证据与恢复说明。
+    implementation_status: partial
+  task_status:
+    purpose: 汇总当前任务状态。
+    implementation_status: implemented
+    states: [idle, running, success, failed, needs_permission]
+  agent_dock:
+    purpose: 承载插件任务表面，但不替代主任务入口。
+    implementation_status: partial
+    states: [idle, running, success, failed, needs_permission]
+  memory_sync_header:
+    purpose: 说明记忆事件同步范围与三天自动采纳策略。
+    implementation_status: partial
+  memory_sync_status:
+    purpose: 展示记忆流程、已接收线索、待确认数量与上次同步时间。
+    implementation_status: partial
+  memory_view_filter:
+    purpose: 展示全局视野、待审事件与历史档案的静态筛选状态。
+    implementation_status: implemented
+  memory_candidate_list:
+    purpose: 在记忆同步工作区中组织待审候选项。
+    implementation_status: partial
+  memory_candidate_card:
+    purpose: 展示可审查的低置信度或冲突候选项。
+    implementation_status: partial
+    states: [pending, merged, rejected, auto_overwritten]
+  expiry_countdown:
+    purpose: 展示三天待审截止与自动采纳结果。
+    implementation_status: partial
+  decision_actions:
+    purpose: 为记忆审查提供范围明确、可审计的决策。
+    implementation_status: implemented
+    accessibility: { focus_visible: true, denial_clear: true }
+  plugin_card:
+    purpose: 展示插件身份与已声明权限。
+    implementation_status: partial
+  permission_declaration_list:
+    purpose: 区分清单声明权限与检测出的权限需求。
+    implementation_status: planned
+  permission_request_dialog:
+    purpose: 第三方敏感权限的交互设计目标；当前原型只读展示。
+    implementation_status: planned
+    actions: [deny, allow_once, allow_session]
+  redacted_parameter_preview:
+    purpose: 展示经脱敏的请求参数预览。
+    implementation_status: partial
+  system_toast:
+    purpose: 在 WebSocket 事件后提供简洁的完成、拦截或失败反馈。
+    implementation_status: implemented
+composition_rules:
+  - 每个功能点必须声明 implementation_status。
+  - partial 在产品 UI 中标注“部分接入”。
+  - planned 在产品 UI 中标注“规划中”并保持只读。
+  - concept_only 不得出现在四个产品 view 中。
+  - 高信任组件使用克制、可审计的中文文案。
+  - 所有可操作组件保留可见焦点；规划中能力不得伪装成可用操作。

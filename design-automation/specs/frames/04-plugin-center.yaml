@@ -1,0 +1,36 @@
+id: frame-04-plugin-center
+kind: key_frame
+canvas: { width: 1440, height: 900, unit: px }
+layout_contract: ../layout-contract.yaml
+title: 插件中心
+handoff:
+  annotation: Portfolio Handoff Annotation / Not product UI
+  user_goal: 在第三方插件访问敏感能力前，判断是否授予当前请求所需权限。
+  core_information: 安装目录身份、请求权限、用途与风险、脱敏参数预览和决策范围。
+  primary_action: 拒绝、仅本次允许或本会话允许（规划中、只读展示）。
+  risk_state: needs_permission / blocked；第三方代码和输出不可信，且检测到敏感参数。
+  design_rationale: 让权限中断、脱敏和不可信边界在扩展执行前可见且可审计。
+  required_components: [app_shell, plugin_card, permission_declaration_list, permission_request_dialog, redacted_parameter_preview, agent_dock]
+  states_to_show: [needs_permission, pending, blocked, granted_once, granted_session, denied]
+  frontend_codex_acceptance: Export 可见插件身份、权限、用途/风险、脱敏预览和三种决策范围；关联 spec/fixture 可核验 WebSocket 请求与只读规划状态。
+portfolio_story: 插件扩展不能绕过用户同意或信任边界。
+layout: { navigation_width: 248, plugin_center: high_trust, permission_governance: readonly_design_goal }
+components: [app_shell, plugin_card, permission_declaration_list, permission_request_dialog, redacted_parameter_preview, agent_dock]
+features:
+  - { id: plugin_identity, implementation_status: partial }
+  - { id: permission_governance, implementation_status: planned }
+  - { id: permission_request_dialog, implementation_status: planned }
+  - { id: redacted_parameter_preview, implementation_status: partial }
+required_content:
+  - 来自安装目录的插件身份，而非自称的信任标签。
+  - 已声明权限与敏感权限需求的区别。
+  - 只读的用途、风险与脱敏参数预览。
+  - 以设计目标形式展示拒绝、仅本次允许与本会话允许。
+  - 不可信第三方输出只能被展示为数据。
+states: { plugin: needs_permission, permission: pending, task: blocked }
+event_binding: { transport: websocket, request: plugin_permission_response, response: plugin_permission_request, fixture: { manifest: ../../fixtures/plugin-manifest.json, requests: ../../fixtures/permission-requests.json } }
+constraints:
+  - 当前原型中的权限治理仅为规划中只读展示。
+  - 不得显示保存成功、已启用或真实授权生效。
+  - 不得新增二次确认输入。
+  - 不得暴露未脱敏的密钥、令牌、主机、联系人或 URL。

@@ -1,0 +1,22 @@
+{
+  "fixtureType": "synthetic_third_party_plugin_manifest",
+  "fixture_mode": "simulation",
+  "implementation_status": "partial",
+  "installed_directory_name": "research_bridge_fixture",
+  "plugin_id": "research_bridge_fixture",
+  "name": "研究桥接器（模拟）",
+  "version": "0.0.0-fixture",
+  "function": {
+    "name": "research_bridge_fixture:search",
+    "description": "仅用于设计测试的模拟外部研究检索。"
+  },
+  "security": {
+    "trust": "third_party",
+    "permissions": ["network", "host_info", "api_key", "plugin_storage"],
+    "sensitive_reason": "该模拟插件需要配置的端点访问与凭据形态参数，以展示脱敏效果。"
+  },
+  "notes": [
+    "目录身份是该设计夹具中的权威身份来源。",
+    "不包含真实凭据、主机、URL 或插件输出。"
+  ]
+}

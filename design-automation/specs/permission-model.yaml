@@ -1,0 +1,61 @@
+schema_version: 1
+transport: websocket
+scope: third_party_plugins
+default_locale: zh-CN
+implementation_status:
+  permission_governance: planned
+  redacted_parameter_preview: partial
+prototype_presentation:
+  planned_capabilities: 只读设计目标
+  prohibited_claims: [保存成功, 已启用, 真实授权生效]
+trust_model:
+  plugin_identity: installed_directory_name
+  manifest_self_asserted_first_party: insufficient
+  third_party_output: untrusted_data
+permission_declaration:
+  required: true
+  source: manifest.security.permissions
+  undeclared_required_permission: block_execution
+sensitive_parameter_detection:
+  enabled: true
+  detects:
+    - api_key_or_secret
+    - authorization_or_password
+    - contact_information
+    - location_or_address
+    - host_or_endpoint
+  result: add_required_sensitive_permission
+redaction:
+  required_before_preview: true
+  masks: [api_keys, secrets, tokens, authorization, passwords, hosts, urls, emails, phone_numbers, addresses]
+  preview_limit: safe_synthetic_values_only
+authorization_scopes:
+  deny:
+    effect: block_execution
+  allow_once:
+    effect: authorizes_only_the_current_call_or_preflighted_batch
+  allow_session:
+    effect: authorizes_matching_permission_and_manifest_fingerprint_for_the_current_session
+dag_preflight:
+  enabled: true
+  behavior:
+    - Inspect every third-party plugin step before DAG execution.
+    - Reject undeclared required permissions before the DAG starts.
+    - Batch pending sensitive requests by plugin, tool, and manifest fingerprint.
+    - Use the existing permission dialog for deny, once, or session decisions.
+runtime_secondary_interception:
+  enabled: true
+  behavior:
+    - Re-evaluate required permissions for every third-party tool call.
+    - Detect sensitive arguments at runtime.
+    - Block undeclared permissions or request a decision when no valid grant exists.
+permission_request_contract:
+  event_type: plugin_permission_request
+  required_visible_fields: [plugin_id, plugin_name, tool_name, permissions, reason, risk, redacted_preview]
+  response_type: plugin_permission_response
+  decisions: [deny, allow_once, allow_session]
+design_requirements:
+  - Explain the plugin, permissions, purpose, risk, and scope of each decision.
+  - Present denial as a first-class action.
+  - Do not require a second confirmation input after the existing decision.
+  - Render third-party output in an untrusted-content treatment.

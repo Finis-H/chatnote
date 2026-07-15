@@ -1,0 +1,69 @@
+{
+  "fixtureType": "synthetic_websocket_memory_events",
+  "fixture_mode": "simulation",
+  "transport": "websocket",
+  "policy": { "pendingExpiry": "P3D", "expiryOutcome": "AUTO_OVERWRITTEN" },
+  "feature_status": { "memory_staging": "partial", "three_day_auto_adoption": "partial" },
+  "workflowSummary": {
+    "receivedClues": 1,
+    "pendingConfirmations": 1,
+    "lastSyncLabel": "本次会话",
+    "headerDescription": "集中处理低置信度、冲突及手动更新候选；待审项未处理满 3 天，将自动采纳并生效。",
+    "summaryText": "发现 1 条待审记忆，等待你的决定。"
+  },
+  "pendingReview": {
+    "riskLabel": "低置信度 · 待审",
+    "countdown": "距自动采纳：剩余 1 天 7 小时",
+    "fields": [
+      { "label": "记忆内容", "value": "偏好简洁的发布摘要。" },
+      { "label": "记忆类型", "value": "长期偏好" },
+      { "label": "来源", "value": "对话摘要" },
+      { "label": "置信度", "value": "低" },
+      { "label": "当前状态", "value": "待人工确认" },
+      { "label": "写入影响", "value": "采纳后作为长期偏好使用" },
+      { "label": "自动采纳", "value": "未处理满 3 天后生效" }
+    ],
+    "confirmationReasons": [
+      "低置信度候选项尚未形成确认的长期事实。",
+      "可由用户采纳或拒绝。",
+      "未处理满 3 天后按既定策略自动采纳。"
+    ]
+  },
+  "request": { "type": "fetch_memory", "session_mode": "main", "session_id": "main" },
+  "responses": [
+    {
+      "type": "memory_data",
+      "content": [
+        {
+          "id": "mem_fixture_pending_001",
+          "status": "PENDING",
+          "category": "偏好",
+          "target_entity": "用户",
+          "new_trait": "偏好简洁的发布摘要。",
+          "source": "模拟对话摘录",
+          "created_at": "2026-07-10T09:00:00Z",
+          "expires_at": "2026-07-13T09:00:00Z"
+        },
+        {
+          "id": "mem_fixture_auto_001",
+          "status": "AUTO_OVERWRITTEN",
+          "category": "关系",
+          "target_entity": "模拟项目",
+          "new_trait": "已归档的所有权关系",
+          "created_at": "2026-07-01T09:00:00Z",
+          "expires_at": "2026-07-04T09:00:00Z"
+        }
+      ],
+      "meta": {
+        "received_clue_count": 2,
+        "pending_count": 1,
+        "last_synced_at": "2026/7/9 00:15:09"
+      }
+    },
+    { "type": "profile_import_state", "content": { "state": "idle" } }
+  ],
+  "decisions": [
+    { "request": { "type": "resolve_memory_conflict", "id": "mem_fixture_pending_001", "decision": "accept" }, "resultStatus": "MERGED" },
+    { "request": { "type": "resolve_memory_conflict", "id": "mem_fixture_pending_001", "decision": "reject" }, "resultStatus": "REJECTED" }
+  ]
+}

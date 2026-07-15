@@ -1,0 +1,38 @@
+id: frame-03-memory-permission
+kind: key_frame
+canvas: { width: 1440, height: 900, unit: px }
+layout_contract: ../layout-contract.yaml
+title: 记忆审查
+handoff:
+  annotation: Portfolio Handoff Annotation / Not product UI
+  user_goal: 审查低置信度记忆候选，并在三天到期前采纳或拒绝。
+  core_information: 候选内容、来源、影响、低置信度状态、到期倒计时与确认理由。
+  primary_action: 采纳更新或拒绝。
+  risk_state: 低置信度、待审；候选不是已确认的长期事实。
+  design_rationale: 将持久记忆写入保持为可审查流程，而非静默推断。
+  required_components: [app_shell, memory_sync_header, memory_sync_status, memory_view_filter, memory_candidate_list, memory_candidate_card, expiry_countdown, decision_actions, system_toast]
+  states_to_show: [pending, merged, rejected, auto_adopted]
+  frontend_codex_acceptance: Export 可见低置信度、倒计时、采纳/拒绝及确认理由；关联 spec/fixture 可核验 P3D 自动采纳与无二次确认输入。
+portfolio_story: 低置信度的长期记忆候选项在生效前必须保持可审查。
+layout: { navigation_width: 248, review_workspace: memory_sync_single_column }
+components: [app_shell, memory_sync_header, memory_sync_status, memory_view_filter, memory_candidate_list, memory_candidate_card, expiry_countdown, decision_actions, system_toast]
+features:
+  - { id: memory_staging, implementation_status: partial }
+  - { id: three_day_auto_adoption, implementation_status: partial }
+  - { id: memory_decision_actions, implementation_status: implemented }
+required_content:
+  - 记忆事件同步标题与三天自动采纳说明。
+  - 记忆流程概览、已接收线索、待确认数量和上次同步时间。
+  - 全局视野、待审事件和历史档案筛选状态。
+  - 待审的低置信度或冲突候选项。
+  - 可用时展示候选来源、理由与影响范围。
+  - 三天自动采纳倒计时。
+  - 带可见焦点的采纳与拒绝操作。
+  - 清楚区分待审、人工采纳、拒绝与超时自动采纳。
+states: { memory: pending, task: idle }
+policy: { pending_expiry: P3D, expiry_outcome: auto_adopted, manual_decisions: [accept, reject] }
+event_binding: { transport: websocket, request: fetch_memory, response: [memory_data, profile_import_state], mutation_request: resolve_memory_conflict, fixture: ../../fixtures/memory-events.json }
+constraints:
+  - 待审候选项不得被视觉上当作已确认的长期事实。
+  - 临时会话不能访问记忆管理操作。
+  - 不得新增二次确认输入。

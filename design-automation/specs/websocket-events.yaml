@@ -1,0 +1,57 @@
+schema_version: 1
+transport:
+  kind: websocket
+  endpoint: /ws/{client_token}
+  authentication: path_token
+  unauthorized_close_code: 1008
+  server_sent_events: prohibited
+message_envelope:
+  request_fields:
+    type: command_name
+    thread_id: optional_thread_id
+    session_mode: main_or_temp
+    session_id: main_or_temp_session_id
+  chat_request_additional_field: message
+  event_discriminator: type
+events:
+  - direction: server_to_client
+    type: history_all
+    payload: { content: thread_history }
+    use: initial_history_sync
+  - direction: client_to_server
+    type: start_temp_session
+    response: temp_session_started
+    use: create_isolated_session
+  - direction: client_to_server
+    type: end_temp_session
+    response: temp_session_ended
+    use: close_isolated_session
+  - direction: client_to_server
+    type: fetch_memory
+    response: [memory_data, profile_import_state]
+    use: load_memory_staging
+  - direction: client_to_server
+    type: resolve_memory_conflict
+    response: [system_toast, SYSTEM_STATE_CHANGED, memory_data]
+    use: accept_or_reject_memory_candidate
+  - direction: server_to_client
+    type: plugin_permission_request
+    response_required: plugin_permission_response
+    use: interrupt_sensitive_third_party_execution
+  - direction: client_to_server
+    type: plugin_permission_response
+    fields: [request_id, decision]
+    decisions: [deny, allow_once, allow_session]
+  - direction: client_to_server
+    type: message
+    fields: [message, thread_id, session_mode, session_id]
+    response: event_bus_json
+    use: start_agent_task
+temporary_session_constraints:
+  - Does not read main memory.
+  - Does not write persistent state.
+  - Discards late results after session termination.
+  - Rejects memory, configuration, profile-import, note-deletion, and plugin-uninstall management actions.
+design_security:
+  - Never show client_token or run_token in the design.
+  - Use synthetic, redacted fixture payloads only.

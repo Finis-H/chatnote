@@ -1,0 +1,46 @@
+{
+  "source": "chat-ui/src/assets/cyber-theme.css",
+  "mode": "dark-professional",
+  "color": {
+    "background": {
+      "app": "#090a0d",
+      "shell": "#0c0d11",
+      "panel": "#111318",
+      "panelRaised": "#171a20",
+      "console": "#06070a",
+      "hover": "rgba(255, 255, 255, 0.045)",
+      "selected": "rgba(44, 224, 196, 0.075)"
+    },
+    "text": {
+      "primary": "#f0f3f5",
+      "secondary": "#c4ccd2",
+      "muted": "#87919b",
+      "disabled": "#58616b",
+      "inverse": "#07100f"
+    },
+    "accent": {
+      "base": "#45e0c8",
+      "strong": "#7cf4df",
+      "soft": "rgba(69, 224, 200, 0.1)",
+      "border": "rgba(69, 224, 200, 0.44)"
+    },
+    "status": {
+      "danger": "#ff6573",
+      "dangerStrong": "#ff8892",
+      "warning": "#f2bd5c",
+      "warningStrong": "#ffd585",
+      "success": "#79d68f",
+      "info": "#7aa7ff"
+    },
+    "border": {
+      "subtle": "#242832",
+      "strong": "#39404a",
+      "muted": "#1a1d24",
+      "dashed": "#4b535f"
+    },
+    "focus": {
+      "outline": "#7cf4df",
+      "ring": "0 0 0 2px rgba(69, 224, 200, 0.92), 0 0 0 5px rgba(69, 224, 200, 0.16)"
+    }
+  }
+}

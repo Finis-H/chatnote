@@ -1,0 +1,47 @@
+schema_version: 1
+applies_to_routes:
+  - control-terminal
+  - agent-running
+  - memory-permission
+  - plugin-center
+canvas:
+  width: 1440
+  height: 900
+  unit: px
+global_regions:
+  left_navigation:
+    required: true
+    width: 248
+  top_status:
+    required: true
+    must_show: WebSocket 状态
+  main_task_entry:
+    required_for: [control-terminal, agent-running]
+    placement: 主内容核心区域
+  right_sidebar:
+    allowed_content: [辅助状态, 上下文摘要, 健康状态]
+    prohibited_content: [完整 Trace 面板, 主任务输入]
+control_terminal:
+  trace_summary:
+    required: true
+    placement: 主控终端顶部区域
+    status: partial
+  required_evidence_module:
+    allowed: false
+agent_running:
+  trace_timeline:
+    placement: 主内容区域
+memory_permission:
+  review_actions:
+    allowed: [accept, reject]
+    additional_confirmation_input: prohibited
+plugin_center:
+  permission_governance:
+    implementation_status: planned
+    presentation: 只读设计目标
+    prohibited_claims: [保存成功, 已启用, 真实授权生效]
+transport:
+  required: WebSocket
+  prohibited: SSE
+page_limit:
+  business_views: 4
