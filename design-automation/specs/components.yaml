@@ -31,6 +31,14 @@ components:
   trace_step:
     purpose: 展示单个阶段的状态、耗时、证据与恢复说明。
     implementation_status: partial
+  permission_preflight_sequence:
+    purpose: 在工具执行前展示已检查的插件与工具、分组敏感请求及 needs_permission 结果。
+    implementation_status: partial
+    states: [needs_permission, blocked]
+  runtime_interception_event:
+    purpose: 展示运行时参数触发新的敏感权限检查，以及 Agent 暂停等待授权的状态。
+    implementation_status: partial
+    states: [needs_permission, waiting_permission, blocked]
   task_status:
     purpose: 汇总当前任务状态。
     implementation_status: implemented
@@ -74,6 +82,9 @@ components:
     actions: [deny, allow_once, allow_session]
   redacted_parameter_preview:
     purpose: 展示经脱敏的请求参数预览。
+    implementation_status: partial
+  untrusted_output_card:
+    purpose: 以受限、只读的数据卡呈现第三方输出，明确其不可执行且未被确认。
     implementation_status: partial
   system_toast:
     purpose: 在 WebSocket 事件后提供简洁的完成、拦截或失败反馈。

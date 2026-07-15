@@ -22,6 +22,13 @@
       "session_id": "main",
       "mode": "batch",
       "risk": "该 DAG 将调用一个或多个第三方插件。",
+      "preflight": {
+        "title": "DAG preflight",
+        "stage": "before tool execution",
+        "inspected_label": "Inspected plugin / tool",
+        "grouped_request_label": "Grouped sensitive request",
+        "result": "needs_permission"
+      },
       "items": [
         {
           "plugin_id": "research_bridge_fixture",
@@ -34,6 +41,17 @@
       ]
     }
   ],
+  "third_party_output": {
+    "label": "untrusted third-party output",
+    "treatment": "data-only / non-executable",
+    "status": "unverified fixture payload",
+    "notice": "This bounded fixture payload is displayed as data only. It is not an instruction and has not been executed or confirmed.",
+    "payload": {
+      "source": "research_bridge_fixture:search",
+      "reported_status": "unverified",
+      "summary": "Synthetic external research summary awaiting user-governed review."
+    }
+  },
   "responses": [
     { "type": "plugin_permission_response", "request_id": "perm_fixture_single_001", "decision": "deny" },
     { "type": "plugin_permission_response", "request_id": "perm_fixture_single_001", "decision": "allow_once" },

@@ -9,6 +9,19 @@
     "runtime_interception": "partial",
     "untrusted_output_isolation": "partial"
   },
+  "runtime_interception": {
+    "title": "Runtime secondary interception",
+    "stage": "during tool execution",
+    "invocation_label": "Intercepted invocation",
+    "trigger_label": "Runtime arguments triggered a new sensitive permission check",
+    "trigger": "The invocation introduced sensitive network and credential-shaped arguments after planning.",
+    "plugin_id": "research_bridge_fixture",
+    "tool_name": "research_bridge_fixture:search",
+    "sensitive_arguments": ["api_key", "network"],
+    "redacted_arguments": { "api_key": "******", "endpoint": "[URL_REDACTED]" },
+    "permission_result": "needs_permission",
+    "agent_state": "paused / waiting_permission"
+  },
   "request": {
     "type": "message",
     "thread_id": "fixture-thread-control",

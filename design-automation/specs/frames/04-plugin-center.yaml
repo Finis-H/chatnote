@@ -10,12 +10,12 @@ handoff:
   primary_action: 拒绝、仅本次允许或本会话允许（规划中、只读展示）。
   risk_state: needs_permission / blocked；第三方代码和输出不可信，且检测到敏感参数。
   design_rationale: 让权限中断、脱敏和不可信边界在扩展执行前可见且可审计。
-  required_components: [app_shell, plugin_card, permission_declaration_list, permission_request_dialog, redacted_parameter_preview, agent_dock]
+  required_components: [app_shell, plugin_card, permission_declaration_list, permission_request_dialog, redacted_parameter_preview, untrusted_output_card, agent_dock]
   states_to_show: [needs_permission, pending, blocked, granted_once, granted_session, denied]
   frontend_codex_acceptance: Export 可见插件身份、权限、用途/风险、脱敏预览和三种决策范围；关联 spec/fixture 可核验 WebSocket 请求与只读规划状态。
 portfolio_story: 插件扩展不能绕过用户同意或信任边界。
 layout: { navigation_width: 248, plugin_center: high_trust, permission_governance: readonly_design_goal }
-components: [app_shell, plugin_card, permission_declaration_list, permission_request_dialog, redacted_parameter_preview, agent_dock]
+components: [app_shell, plugin_card, permission_declaration_list, permission_request_dialog, redacted_parameter_preview, untrusted_output_card, agent_dock]
 features:
   - { id: plugin_identity, implementation_status: partial }
   - { id: permission_governance, implementation_status: planned }
@@ -27,6 +27,7 @@ required_content:
   - 只读的用途、风险与脱敏参数预览。
   - 以设计目标形式展示拒绝、仅本次允许与本会话允许。
   - 不可信第三方输出只能被展示为数据。
+  - 使用 synthetic redacted fixture 呈现受限的 untrusted third-party output 数据卡，且不得将其视为指令或确认结果。
 states: { plugin: needs_permission, permission: pending, task: blocked }
 event_binding: { transport: websocket, request: plugin_permission_response, response: plugin_permission_request, fixture: { manifest: ../../fixtures/plugin-manifest.json, requests: ../../fixtures/permission-requests.json } }
 constraints:

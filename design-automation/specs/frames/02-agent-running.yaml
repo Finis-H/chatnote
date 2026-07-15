@@ -10,12 +10,12 @@ handoff:
   primary_action: 查看运行中 Trace；可通过导航返回主控终端。
   risk_state: 运行中；可选来源已降级，执行保障能力为部分接入。
   design_rationale: 用可读时间线代替原始日志，帮助用户判断执行状态与结果证据。
-  required_components: [app_shell, command_console, task_status, trace_timeline, trace_step, agent_dock, connection_status]
+  required_components: [app_shell, command_console, task_status, trace_timeline, trace_step, permission_preflight_sequence, runtime_interception_event, agent_dock, connection_status]
   states_to_show: [connected, running, success, degraded, failed, timeout, blocked]
   frontend_codex_acceptance: Export 可区分 running/degraded/success、耗时与 WebSocket；关联 spec/fixture 可核验 message 请求和模拟事件流。
 portfolio_story: 复杂的工具使用过程应在执行时保持可观察。
 layout: { navigation_width: 248, workspace_min_width: 760, trace_panel: main_content }
-components: [app_shell, command_console, task_status, trace_timeline, trace_step, agent_dock, connection_status]
+components: [app_shell, command_console, task_status, trace_timeline, trace_step, permission_preflight_sequence, runtime_interception_event, agent_dock, connection_status]
 features:
   - { id: trace_timeline, implementation_status: partial }
   - { id: dag_preflight, implementation_status: partial }
@@ -27,6 +27,8 @@ required_content:
   - 可读的计划、检索、工具与回复阶段。
   - 运行、成功、失败、降级、超时或阻断等状态。
   - 至少一个阶段的耗时或结果证据。
+  - 使用 perm_fixture_dag_001 展示工具执行前的 DAG 预检、已检查插件/工具、分组敏感请求和 needs_permission 结果。
+  - 展示运行时参数触发新的敏感权限检查，并将 Agent 标为 paused / waiting_permission。
   - 以模拟数据或设计目标标注尚未落地的运行时能力。
 states: { connection: connected, task: running, trace: running, agent_dock: running }
 event_binding: { transport: websocket, inbound: message, outbound: event_bus_json, fixture: ../../fixtures/agent-run-events.json }

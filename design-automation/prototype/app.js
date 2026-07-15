@@ -167,6 +167,21 @@ function pluginCenter(copy, manifestFixture, requestsFixture) {
   return `<div class="plugin-layout"><section class="plugin-center"><section class="plugin-card card"><div class="plugin-name"><div><span class="eyebrow">${c.directoryIdentity}</span><h2>${escapeHtml(manifestFixture.name)}</h2><span class="muted mono">${escapeHtml(manifestFixture.installed_directory_name)}</span></div>${statusTag(copy.status.partial, "warning")}</div><p class="panel-title plugin-section-title">${c.declaration}</p><div class="permission-grid">${manifestFixture.security.permissions.map((permission) => `<div class="permission-cell">${escapeHtml(permissionLabel(permission, copy))}</div>`).join("")}</div><div class="plugin-card-actions" data-plugin-id="${escapeHtml(manifestFixture.plugin_id)}"><button class="button secondary" type="button" disabled aria-label="${escapeHtml(c.settings)} ${escapeHtml(manifestFixture.name)}">${c.settings}</button><button class="button danger" type="button" disabled aria-label="${escapeHtml(c.delete)} ${escapeHtml(manifestFixture.name)}">${c.delete}</button></div></section><p class="trust-note">${c.untrusted}</p><section class="spec-card card"><p class="panel-title">${c.checks}</p><div class="component-list">${[c.dagPreflight, c.runtimeInterception, c.sensitiveDetection, c.outputIsolation].map((label) => statusTag(label)).join("")}</div></section></section><aside class="permission-dialog readonly-panel"><header class="dialog-head"><span class="eyebrow">${copy.status.planned} · ${copy.status.readonly}</span><h2>${c.permissionGovernance}</h2></header><div class="dialog-content"><p class="dialog-copy">${c.planningDetail}</p><p class="dialog-copy">${escapeHtml(request.reason)}</p><div>${request.permissions.map((permission) => statusTag(permissionLabel(permission, copy), "warning")).join(" ")}</div><p class="panel-title">${c.redactedPreview}</p><pre class="preview" aria-label="${c.redactedPreview}">${escapeHtml(preview)}</pre><p class="panel-title">${c.decisionModel}</p><div class="decision-legend">${[c.deny, c.allowOnce, c.allowSession].map((label) => statusTag(label)).join("")}</div></div></aside></div>`;
 }
 
+function agentSafeguardEvidence(copy, agentFixture, permissionRequests) {
+  const dagRequest = permissionRequests.requestEvents.find((event) => event.request_id === "perm_fixture_dag_001");
+  const preflight = dagRequest.preflight;
+  const runtime = agentFixture.runtime_interception;
+  const inspectedRows = dagRequest.items.map((item) => `<div class="evidence-row"><span>${escapeHtml(item.plugin_name)}</span><strong>${escapeHtml(item.tool_name)}</strong></div>`).join("");
+  const groupedPermissions = dagRequest.items.flatMap((item) => item.permissions).filter((permission, index, values) => values.indexOf(permission) === index);
+  const runtimePreview = JSON.stringify(runtime.redacted_arguments, null, 2);
+  return `<section class="trace-evidence" aria-label="Runtime safeguard evidence"><article class="evidence-card"><header><div><span class="eyebrow">${escapeHtml(preflight.stage)}</span><h3>${escapeHtml(preflight.title)}</h3></div>${statusTag(preflight.result, "warning")}</header><p class="evidence-label">${escapeHtml(preflight.inspected_label)}</p>${inspectedRows}<p class="evidence-label">${escapeHtml(preflight.grouped_request_label)}</p><div class="component-list">${groupedPermissions.map((permission) => statusTag(permissionLabel(permission, copy), "warning")).join("")}</div></article><article class="evidence-card interception-card"><header><div><span class="eyebrow">${escapeHtml(runtime.stage)}</span><h3>${escapeHtml(runtime.title)}</h3></div>${statusTag(runtime.agent_state, "warning")}</header><p class="evidence-label">${escapeHtml(runtime.invocation_label)}</p><div class="evidence-row"><span>${escapeHtml(runtime.plugin_id)}</span><strong>${escapeHtml(runtime.tool_name)}</strong></div><p class="evidence-label">${escapeHtml(runtime.trigger_label)}</p><p class="evidence-copy">${escapeHtml(runtime.trigger)}</p><pre class="evidence-preview">${escapeHtml(runtimePreview)}</pre><div class="evidence-result">${statusTag(runtime.permission_result, "warning")}${statusTag(runtime.agent_state, "warning")}</div></article></section>`;
+}
+
+function untrustedOutputCard(output) {
+  const payload = JSON.stringify(output.payload, null, 2);
+  return `<section class="untrusted-output-card card" aria-label="${escapeHtml(output.label)}"><header><div><span class="eyebrow">${escapeHtml(output.status)}</span><h3>${escapeHtml(output.label)}</h3></div>${statusTag(output.treatment, "warning")}</header><p>${escapeHtml(output.notice)}</p><pre class="output-payload">${escapeHtml(payload)}</pre></section>`;
+}
+
 function render(route, resources) {
   const frame = resources.frames[viewConfig[route].frame];
   const content = route === "control-terminal" ? controlTerminal(resources.copy)
@@ -174,6 +189,12 @@ function render(route, resources) {
       : route === "memory-permission" ? memoryPermission(resources.copy, resources.memory)
         : pluginCenter(resources.copy, resources.pluginManifest, resources.permissionRequests);
   app.innerHTML = shell(route, frame, resources.componentNames, resources.copy, content);
+  if (route === "agent-running") {
+    app.querySelector(".trace-layout > .card").insertAdjacentHTML("beforeend", agentSafeguardEvidence(resources.copy, resources.agentRun, resources.permissionRequests));
+  }
+  if (route === "plugin-center") {
+    app.querySelector(".plugin-center").insertAdjacentHTML("beforeend", untrustedOutputCard(resources.permissionRequests.third_party_output));
+  }
 }
 
 async function boot() {
