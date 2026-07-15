@@ -231,7 +231,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .plugin-name h2 { margin: 4px 0; font-size: 18px; }
 .permission-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 16px; }
 .permission-cell { padding: 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-panel-raised); color: var(--text-secondary); font: 12px Consolas, monospace; }
-.plugin-card-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-lg); }
+.plugin-card-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-lg); opacity: .72; }
 .plugin-card-actions .button { min-width: 76px; }
 .trust-note { margin: 0; padding: 12px; color: var(--warning-strong); border: 1px solid rgba(242,189,92,.35); border-radius: var(--radius-sm); background: rgba(243,185,73,.06); font-size: 12px; line-height: 1.5; }
 .untrusted-output-card { padding: 13px; border-left: 3px solid var(--warning); background: rgba(243,185,73,.04); }
@@ -246,7 +246,13 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .dialog-actions { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px; padding: 16px 18px; border-top: 1px solid var(--border-subtle); }
 .dialog-actions .button { min-height: 38px; padding: 8px; }
 .readonly-panel { border-color: rgba(242,189,92,.44); }
-.decision-legend { display: flex; flex-wrap: wrap; gap: 7px; }
+.permission-decision-row { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--accent-border); border-radius: var(--radius-md); background: var(--accent-soft); }
+.decision-option { display: grid; grid-template-columns: 124px minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-panel); }
+.decision-option .button { width: 100%; min-height: 34px; padding: 7px 8px; text-align: left; }
+.decision-option .button:disabled { opacity: 1; cursor: not-allowed; }
+.decision-option .button.secondary:disabled { color: var(--text-secondary); background: var(--bg-panel-raised); }
+.decision-option .button.danger:disabled { color: var(--danger-strong); background: rgba(255,93,106,.12); }
+.decision-option span { color: var(--text-secondary); font-size: 10px; line-height: 1.35; }
 
 .loading-card { margin: 380px auto; width: 340px; padding: 18px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); color: var(--text-secondary); background: var(--bg-panel); text-align: center; }
 .error-card { margin: 250px auto; width: 620px; padding: 22px; border: 1px solid rgba(255,101,115,.45); border-radius: var(--radius-md); color: var(--danger-strong); background: rgba(255,93,106,.08); }

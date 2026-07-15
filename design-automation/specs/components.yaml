@@ -80,6 +80,10 @@ components:
     purpose: 第三方敏感权限的交互设计目标；当前原型只读展示。
     implementation_status: planned
     actions: [deny, allow_once, allow_session]
+  permission_decision_row:
+    purpose: 以禁用、只读的决策行展示拒绝、仅本次允许和本会话允许，以及每项的授权范围。
+    implementation_status: planned
+    actions: [deny, allow_once, allow_session]
   redacted_parameter_preview:
     purpose: 展示经脱敏的请求参数预览。
     implementation_status: partial

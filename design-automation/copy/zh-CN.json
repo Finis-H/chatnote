@@ -123,6 +123,11 @@
     "deny": "拒绝",
     "allowOnce": "仅本次允许",
     "allowSession": "本会话允许",
+    "decisionScopes": {
+      "deny": "block this request",
+      "allowOnce": "current invocation only",
+      "allowSession": "same plugin + same permission scope in this session"
+    },
     "untrusted": "第三方代码和输出均视为不可信内容。清单中的自称信任级别不能绕过安装目录身份或权限策略。",
     "dagPreflight": "DAG 预检",
     "runtimeInterception": "运行时二次拦截",

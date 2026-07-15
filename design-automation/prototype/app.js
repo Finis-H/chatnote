@@ -182,6 +182,16 @@ function untrustedOutputCard(output) {
   return `<section class="untrusted-output-card card" aria-label="${escapeHtml(output.label)}"><header><div><span class="eyebrow">${escapeHtml(output.status)}</span><h3>${escapeHtml(output.label)}</h3></div>${statusTag(output.treatment, "warning")}</header><p>${escapeHtml(output.notice)}</p><pre class="output-payload">${escapeHtml(payload)}</pre></section>`;
 }
 
+function permissionDecisionRow(copy) {
+  const c = copy.plugin;
+  const options = [
+    [c.deny, c.decisionScopes.deny, "danger"],
+    [c.allowOnce, c.decisionScopes.allowOnce, "secondary"],
+    [c.allowSession, c.decisionScopes.allowSession, ""],
+  ];
+  return `<section class="permission-decision-row" aria-label="${escapeHtml(c.decisionModel)}">${options.map(([label, scope, tone]) => `<div class="decision-option"><button class="button ${tone}" type="button" disabled>${escapeHtml(label)}</button><span>${escapeHtml(scope)}</span></div>`).join("")}</section>`;
+}
+
 function render(route, resources) {
   const frame = resources.frames[viewConfig[route].frame];
   const content = route === "control-terminal" ? controlTerminal(resources.copy)
@@ -194,6 +204,7 @@ function render(route, resources) {
   }
   if (route === "plugin-center") {
     app.querySelector(".plugin-center").insertAdjacentHTML("beforeend", untrustedOutputCard(resources.permissionRequests.third_party_output));
+    app.querySelector(".decision-legend").outerHTML = permissionDecisionRow(resources.copy);
   }
 }
 
