@@ -5,7 +5,7 @@ layout_contract: ../layout-contract.yaml
 title: Agent 执行中
 handoff:
   annotation: Portfolio Handoff Annotation / Not product UI
-  user_goal: 跟踪当前任务的执行进度、降级风险与可观察 Trace。
+  user_goal: Observe how Vault OS retrieves knowledge and calls plugins before allowing sensitive memory access
   core_information: 运行中的 message 任务、Trace 阶段、耗时、恢复说明和 WebSocket 传输。
   primary_action: 查看运行中 Trace；可通过导航返回主控终端。
   risk_state: 运行中；可选来源已降级，执行保障能力为部分接入。

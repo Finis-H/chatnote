@@ -59,5 +59,5 @@ Scope: design inputs, static prototype presentation, and handoff criteria only. 
 - Capture exactly four exports, each exactly 1440 × 900.
 - Confirm WebSocket is visible and no SSE or second confirmation input appears.
 - Confirm sensitive detection/redaction, DAG preflight, runtime interception, and untrusted-output isolation are shown as concrete states—not only labels.
-- Confirm the three-day low-confidence memory policy and all eight handoff fields appear for every keyframe.
+- Confirm the three-day low-confidence memory policy uses the canonical `auto_adopted` outcome and all eight handoff fields appear for every keyframe.
 - Confirm no synthetic fixture reveals a token, API key, host, URL, user memory, or runtime data.

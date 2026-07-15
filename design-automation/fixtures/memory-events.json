@@ -2,7 +2,7 @@
   "fixtureType": "synthetic_websocket_memory_events",
   "fixture_mode": "simulation",
   "transport": "websocket",
-  "policy": { "pendingExpiry": "P3D", "expiryOutcome": "AUTO_OVERWRITTEN" },
+  "policy": { "pendingExpiry": "P3D", "expiryOutcome": "auto_adopted" },
   "feature_status": { "memory_staging": "partial", "three_day_auto_adoption": "partial" },
   "workflowSummary": {
     "receivedClues": 1,
@@ -46,7 +46,7 @@
         },
         {
           "id": "mem_fixture_auto_001",
-          "status": "AUTO_OVERWRITTEN",
+          "status": "auto_adopted",
           "category": "关系",
           "target_entity": "模拟项目",
           "new_trait": "已归档的所有权关系",

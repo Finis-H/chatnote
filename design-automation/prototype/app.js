@@ -94,8 +94,14 @@ function handoffAnnotation(frame) {
     ["States to Show", "states_to_show"],
     ["Frontend / Codex Acceptance Criteria", "frontend_codex_acceptance"],
   ];
-  const value = (item) => Array.isArray(item) ? item.join(", ") : item;
-  return `<aside class="handoff-annotation" aria-label="${escapeHtml(frame.handoff.annotation)}"><header class="handoff-heading"><strong>${escapeHtml(frame.handoff.annotation)}</strong><span>Static export overlay</span></header><dl class="handoff-grid">${fields.map(([label, key]) => `<div class="handoff-item"><dt>${label}</dt><dd>${escapeHtml(value(frame.handoff[key] || "—"))}</dd></div>`).join("")}</dl></aside>`;
+  const value = (item, key) => {
+    if (key === "required_components" && Array.isArray(item)) {
+      const listed = item.slice(0, 3).join(", ");
+      return item.length > 3 ? `${listed} +${item.length - 3}` : listed;
+    }
+    return Array.isArray(item) ? item.join(", ") : item;
+  };
+  return `<aside class="handoff-annotation" aria-label="${escapeHtml(frame.handoff.annotation)}"><header class="handoff-heading"><strong>${escapeHtml(frame.handoff.annotation)}</strong><span>Static export overlay</span></header><dl class="handoff-grid">${fields.map(([label, key]) => `<div class="handoff-item"><dt>${label}</dt><dd>${escapeHtml(value(frame.handoff[key] || "—", key))}</dd></div>`).join("")}</dl></aside>`;
 }
 
 function shell(route, frame, componentNames, copy, content) {
@@ -192,6 +198,15 @@ function permissionDecisionRow(copy) {
   return `<section class="permission-decision-row" aria-label="${escapeHtml(c.decisionModel)}">${options.map(([label, scope, tone]) => `<div class="decision-option"><button class="button ${tone}" type="button" disabled>${escapeHtml(label)}</button><span>${escapeHtml(scope)}</span></div>`).join("")}</section>`;
 }
 
+function boundedIdleRiskCard(copy) {
+  const c = copy.controlTerminal;
+  return `<section class="status-card card risk-state-card"><p class="panel-title">${escapeHtml(c.riskStateLabel)}</p><p class="risk-state-value">${escapeHtml(c.riskState)}</p></section>`;
+}
+
+function runningObservationControl(copy) {
+  return `<button class="button observation-control" type="button" disabled>${escapeHtml(copy.agentRunning.inspectCurrentStep)}</button>`;
+}
+
 function render(route, resources) {
   const frame = resources.frames[viewConfig[route].frame];
   const content = route === "control-terminal" ? controlTerminal(resources.copy)
@@ -199,7 +214,11 @@ function render(route, resources) {
       : route === "memory-permission" ? memoryPermission(resources.copy, resources.memory)
         : pluginCenter(resources.copy, resources.pluginManifest, resources.permissionRequests);
   app.innerHTML = shell(route, frame, resources.componentNames, resources.copy, content);
+  if (route === "control-terminal") {
+    app.querySelector(".terminal-grid > .side-stack").insertAdjacentHTML("beforeend", boundedIdleRiskCard(resources.copy));
+  }
   if (route === "agent-running") {
+    app.querySelector(".trace-layout > .card .panel-head").insertAdjacentHTML("beforeend", runningObservationControl(resources.copy));
     app.querySelector(".trace-layout > .card").insertAdjacentHTML("beforeend", agentSafeguardEvidence(resources.copy, resources.agentRun, resources.permissionRequests));
   }
   if (route === "plugin-center") {

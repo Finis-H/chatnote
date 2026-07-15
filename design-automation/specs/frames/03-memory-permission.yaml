@@ -5,7 +5,7 @@ layout_contract: ../layout-contract.yaml
 title: 记忆审查
 handoff:
   annotation: Portfolio Handoff Annotation / Not product UI
-  user_goal: 审查低置信度记忆候选，并在三天到期前采纳或拒绝。
+  user_goal: Decide whether to retain a low-confidence preference before it auto-adopts in 3 days
   core_information: 候选内容、来源、影响、低置信度状态、到期倒计时与确认理由。
   primary_action: 采纳更新或拒绝。
   risk_state: 低置信度、待审；候选不是已确认的长期事实。

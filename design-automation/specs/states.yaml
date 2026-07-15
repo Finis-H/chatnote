@@ -15,7 +15,7 @@ state_groups:
     values: [idle, running, success, degraded, failed, timeout, aborted, blocked]
     implementation_status: partial
   memory:
-    values: [pending, merged, rejected, auto_overwritten]
+    values: [pending, merged, rejected, auto_adopted]
     implementation_status: partial
   permission:
     values: [not_required, pending, granted_once, granted_session, denied, blocked_undeclared]

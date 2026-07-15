@@ -62,7 +62,7 @@ components:
   memory_candidate_card:
     purpose: 展示可审查的低置信度或冲突候选项。
     implementation_status: partial
-    states: [pending, merged, rejected, auto_overwritten]
+    states: [pending, merged, rejected, auto_adopted]
   expiry_countdown:
     purpose: 展示三天待审截止与自动采纳结果。
     implementation_status: partial

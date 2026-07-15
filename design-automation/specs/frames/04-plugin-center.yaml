@@ -5,7 +5,7 @@ layout_contract: ../layout-contract.yaml
 title: 插件中心
 handoff:
   annotation: Portfolio Handoff Annotation / Not product UI
-  user_goal: 在第三方插件访问敏感能力前，判断是否授予当前请求所需权限。
+  user_goal: Review whether a plugin may access network and local memory for this planned task
   core_information: 安装目录身份、请求权限、用途与风险、脱敏参数预览和决策范围。
   primary_action: 拒绝、仅本次允许或本会话允许（规划中、只读展示）。
   risk_state: needs_permission / blocked；第三方代码和输出不可信，且检测到敏感参数。

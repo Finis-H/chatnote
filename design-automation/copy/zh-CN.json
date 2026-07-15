@@ -38,6 +38,8 @@
     "plugin_storage": "插件存储"
   },
   "controlTerminal": {
+    "riskStateLabel": "Risk state",
+    "riskState": "Bounded idle — no tool call, no memory write, no network access",
     "session": "主会话 · 本地工作台",
     "ready": "就绪",
     "traceSummary": "Trace 摘要",
@@ -62,6 +64,7 @@
     "healthDetail": "原型仅展示稳定状态"
   },
   "agentRunning": {
+    "inspectCurrentStep": "Inspect current step",
     "timeline": "执行时间线",
     "taskState": "任务状态",
     "request": "请求类型",
@@ -81,6 +84,7 @@
     "eventDetail": "事件来自基于 WebSocket 的模拟状态流。"
   },
   "memory": {
+    "canonicalOutcome": "auto_adopted",
     "syncTitle": "记忆事件同步",
     "syncDescription": "在此处理低置信度、关系变更、手动记忆更新和冲突候选。待审项未处理满 3 天后，将自动采纳并生效。",
     "flow": "记忆流程",

@@ -153,6 +153,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 
 .side-stack { display: grid; align-content: start; gap: 14px; }
 .status-card, .dock-card, .spec-card { padding: 15px; }
+.risk-state-card { border-left: 3px solid var(--accent); }
+.risk-state-value { margin: 9px 0 0; color: var(--accent-strong); font: 11px/1.45 Consolas, "SFMono-Regular", monospace; }
 .metric { display: flex; align-items: baseline; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
 .metric:last-child { border-bottom: 0; padding-bottom: 0; }
 .metric strong { color: var(--accent-strong); font: 13px Consolas, monospace; }
@@ -175,6 +177,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .trace-step p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
 .trace-time { color: var(--text-muted); font: 11px Consolas, monospace; }
 .recovery-card { border-left: 3px solid var(--warning); }
+.observation-control { margin-left: auto; padding: 7px 9px; }
+.observation-control:disabled { opacity: .86; cursor: default; }
 .trace-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 18px 14px; }
 .evidence-card { min-width: 0; padding: 10px; border: 1px solid var(--border-subtle); border-left: 3px solid var(--warning); border-radius: var(--radius-sm); background: rgba(243,185,73,.04); }
 .evidence-card header, .untrusted-output-card header { display: flex; align-items: start; justify-content: space-between; gap: 10px; }

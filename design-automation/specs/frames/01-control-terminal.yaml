@@ -8,7 +8,7 @@ handoff:
   user_goal: 提交主会话任务，并判断本地工作台、Trace 与记忆边界的当前状态。
   core_information: 本地主会话、WebSocket 连接、Trace 摘要与记忆边界。
   primary_action: 执行任务（静态 export 中为 fixture-disabled）。
-  risk_state: 主会话；候选记忆须先审查，尚未写入持久状态。
+  risk_state: Bounded idle — no tool call, no memory write, no network access
   design_rationale: 用主控终端集中呈现本地优先任务入口与可观察执行摘要。
   required_components: [app_shell, grouped_navigation, connection_status, command_console, conversation_stream, trace_summary, agent_dock]
   states_to_show: [connected, idle, partial_trace]
