@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "artifact_type": "figma_ready_static_prototype_exports",
+  "generated_on": "2026-07-15",
+  "source": {
+    "prototype": "../prototype/index.html",
+    "frame_specs": "../specs/frames"
+  },
+  "canvas": { "width": 1440, "height": 900, "unit": "px" },
+  "exports": [
+    { "id": "KF01", "frame": "Control Terminal Home", "file": "exports/KF01-control-terminal.png" },
+    { "id": "KF02", "frame": "Agent Running", "file": "exports/KF02-agent-running.png" },
+    { "id": "KF03", "frame": "Memory Review + Permission Gate", "file": "exports/KF03-memory-permission.png" },
+    { "id": "KF04", "frame": "Plugin Center + Settings", "file": "exports/KF04-plugin-center.png" }
+  ],
+  "data_boundary": "Static fixture-only exports. Inputs are synthetic and redacted; no production runtime connection is included."
+}
