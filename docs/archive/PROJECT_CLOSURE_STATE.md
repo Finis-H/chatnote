@@ -6,12 +6,13 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 当前工作包 | 04-approved-cleanup |
-| 阶段状态 | A-1、B-1 已完成；当前所有已批准批次均已完成，等待用户确认是否进入 05-current-state-baseline |
-| 归档总状态 | 归档关闭中；清理前快照、只读审计与已批准的清理批次 A-1、B-1 已完成 |
-| 最近更新时间 | 2026-07-17 02:28 +08:00 |
+| 当前工作包 | 05-current-state-baseline |
+| 阶段状态 | 04-approved-cleanup 已完成；05-current-state-baseline 已完成，当前等待进入 06-decommission |
+| 归档总状态 | 归档关闭中；清理前快照、只读审计、已批准清理批次 A-1/B-1 与当前状态基线已完成 |
+| 最近更新时间 | 2026-07-17 02:41 +08:00 |
 | 负责人 | 用户（关闭边界、资产与对外决策）/ Codex（审查与已批准变更协助） |
-| 当前归档文档 | `docs/archive/00-closure-scope.md`、`docs/archive/01-final-snapshot.md`、`docs/archive/02-audit-manifest.md`、`docs/archive/04-cleanup-execution-log.md` |
+| 当前归档文档 | `docs/archive/00-closure-scope.md`、`docs/archive/01-final-snapshot.md`、`docs/archive/02-audit-manifest.md`、`docs/archive/03-feature-status.md`、`docs/archive/04-cleanup-execution-log.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md` |
+| 未批准候选与运行时数据 | 仍保留。除 A-1、B-1 已批准并完成的精确项外，其余候选、vault/、dist/vault/、当前 sidecar、bin/_internal/、vault_seed 与外部资源均未处理。 |
 
 ## 版本锚点
 
@@ -31,10 +32,10 @@
 | 工作包 | 状态 | 产物 | 验证结论 |
 | --- | --- | --- | --- |
 | 01-scope-and-freeze | 已完成并记录人工确认 | `docs/archive/00-closure-scope.md`、本状态文件 | OQ-CLOSE-001 至 OQ-CLOSE-008 已记录；未建立标签、提交或 Release，未修改业务代码，未关闭外部资源。 |
-| 02-final-snapshot | 已完成并复核通过，等待用户明确授权进入 03-audit-only | `docs/archive/01-final-snapshot.md`、本状态文件 | 第三次归档文档提交范围与清理前标签指向已复核正确；已记录环境、资产哈希、敏感线索和验证结果；未运行安装包或 Windows 打包。 |
+| 02-final-snapshot | 已完成并复核通过 | `docs/archive/01-final-snapshot.md`、本状态文件 | 第三次归档文档提交范围与清理前标签指向已复核正确；已记录环境、资产哈希、敏感线索和验证结果；未运行安装包或 Windows 打包。 |
 | 03-audit-only | 已完成，等待人工清理决定 | `docs/archive/02-audit-manifest.md`、本状态文件 | 以 `vault-os-pre-archive-20260716` 为基线完成只读审计；未删除、移动、重命名、提交、打标签、推送、运行安装包或修改业务代码。 |
-| 04-approved-cleanup | 当前所有已批准批次已完成；等待进入 05 的人工确认 | `docs/archive/04-cleanup-execution-log.md`、本状态文件 | A-1 与 B-1 已完成：B-1 的 NSIS 私有归档已验证，三个精确候选文件已删除并复核不存在；未运行、安装、签名或公开安装包，也未运行 Build、测试或服务。 |
-| 05-current-state-baseline | 未开始 | - | - |
+| 04-approved-cleanup | 已完成 | `docs/archive/04-cleanup-execution-log.md`、本状态文件 | A-1 与 B-1 已完成：B-1 的 NSIS 私有归档已验证，三个精确候选文件已删除并复核不存在；未运行、安装、签名或公开安装包，也未运行 Build、测试或服务。 |
+| 05-current-state-baseline | 已完成；等待进入 06-decommission | `docs/archive/03-feature-status.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、本状态文件 | 以清理前标签作为源码基线，记录功能状态、当前架构、设计差距和重构 Backlog；未运行新的 Build/Test/服务，未修改业务代码、依赖、Docker、Tauri 配置或运行时数据。 |
 | 06-decommission | 未开始 | - | - |
 | 07-retrospective-and-sop | 未开始 | - | - |
 | 08-final-acceptance | 未开始 | - | - |
@@ -85,3 +86,4 @@
 | 2026-07-17 00:09 +08:00 | 以 `vault-os-pre-archive-20260716` 为基线完成 03 只读审计。 | 已检查源码引用、动态插件/sidecar、依赖、忽略构建产物、安装包哈希、设计/截图/Eval 证据、文档相对链接、Docker 与 CI 线索；完整候选清单已写入 `02-audit-manifest.md`。 | 未读取运行时数据，未重跑 Build/Test/服务，未处理候选项；进入 04 前需用户明确批准具体候选或批次。 |
 | 2026-07-17 01:56 +08:00 | 完成 A-1 删除后的非破坏性复核。 | `__pycache__/`、`tests/__pycache__/`、`build/vault_engine/` 均不存在；`.venv/`、`vault/`、`dist/`、其它已列出的 `build/` 候选、`target/`、`temp/`、`vault_seed/` 均仍存在。 | 删除由用户手动完成；未运行 Build、测试、服务或安装包。文档静态检查与本地提交结果见本批次执行记录。 |
 | 2026-07-17 02:28 +08:00 | 完成 B-1 私有归档与删除后的非破坏性复核。 | `VAULT-OS-PRIV-NSIS-001` 哈希匹配；NSIS 源文件仍存在；重复 NSIS、MSI、旧 sidecar 均不存在；列出的 sidecar、运行时、构建、临时、配置与依赖排除范围均仍存在。 | 未运行、安装、签名或公开安装包，未运行 Build、测试或服务；文档静态检查与本地提交结果见本批次执行记录。 |
+| 2026-07-17 02:41 +08:00 | 完成 05 当前状态基线的只读审查与文档编写。 | 已写入功能状态、当前架构、设计/实现差距与重构 Backlog；源码基线为 `vault-os-pre-archive-20260716`，标签后仅有归档文档与清理记录。 | 未运行新的 Build、测试或服务；Windows 安装/卸载、Tauri bundle、动态插件、外部资源、运行时数据和 Eval 汇总冲突仍待后续人工确认。 |
