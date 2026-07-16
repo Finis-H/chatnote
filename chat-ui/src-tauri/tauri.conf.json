@@ -41,6 +41,9 @@
     "externalBin": [
       "bin/vault_engine"
     ],
+    "resources": {
+      "bin/_internal/": "_internal"
+    },
     "windows": {
       "nsis": {
         "installMode": "both"

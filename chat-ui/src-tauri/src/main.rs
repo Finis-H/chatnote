@@ -12,9 +12,20 @@ use tauri_plugin_shell::ShellExt;
 fn get_vault_path() -> PathBuf {
     #[cfg(debug_assertions)]
     {
-        let dev_path = std::env::current_dir().unwrap_or_default().join("../../vault");
+        let dev_path = std::env::current_dir()
+            .unwrap_or_default()
+            .join("../../vault");
         if dev_path.exists() {
             return dev_path;
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        if let Some(local_data_dir) = dirs::data_local_dir() {
+            let vault_path = local_data_dir.join("Vault OS").join("vault");
+            let _ = fs::create_dir_all(&vault_path);
+            return vault_path;
         }
     }
 
