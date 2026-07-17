@@ -6,13 +6,13 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 当前工作包 | 05-current-state-baseline |
-| 阶段状态 | 04-approved-cleanup 已完成；05-current-state-baseline 已完成，当前等待进入 06-decommission |
-| 归档总状态 | 归档关闭中；清理前快照、只读审计、已批准清理批次 A-1/B-1 与当前状态基线已完成 |
-| 最近更新时间 | 2026-07-17 02:41 +08:00 |
+| 当前工作包 | 06-decommission |
+| 阶段状态 | 06-decommission 的只读检查已完成，当前等待进入 07-retrospective-and-sop |
+| 归档总状态 | 归档关闭中；清理前快照、只读审计、已批准清理批次 A-1/B-1、当前状态基线与外部资源处置清单已完成 |
+| 最近更新时间 | 2026-07-17 15:29 +08:00 |
 | 负责人 | 用户（关闭边界、资产与对外决策）/ Codex（审查与已批准变更协助） |
-| 当前归档文档 | `docs/archive/00-closure-scope.md`、`docs/archive/01-final-snapshot.md`、`docs/archive/02-audit-manifest.md`、`docs/archive/03-feature-status.md`、`docs/archive/04-cleanup-execution-log.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md` |
-| 未批准候选与运行时数据 | 仍保留。除 A-1、B-1 已批准并完成的精确项外，其余候选、vault/、dist/vault/、当前 sidecar、bin/_internal/、vault_seed 与外部资源均未处理。 |
+| 当前归档文档 | `docs/archive/00-closure-scope.md`、`docs/archive/01-final-snapshot.md`、`docs/archive/02-audit-manifest.md`、`docs/archive/03-feature-status.md`、`docs/archive/04-cleanup-execution-log.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、`docs/archive/07-decommission-checklist.md` |
+| 未批准候选与运行时数据 | 仍保留。除 A-1、B-1 已批准并完成的精确项外，其余候选、vault/、dist/vault/、当前 sidecar、bin/_internal/、vault_seed 与外部资源均未处理；所有未决外部事项按“私有保留、不得变更”处理。 |
 
 ## 版本锚点
 
@@ -36,7 +36,7 @@
 | 03-audit-only | 已完成，等待人工清理决定 | `docs/archive/02-audit-manifest.md`、本状态文件 | 以 `vault-os-pre-archive-20260716` 为基线完成只读审计；未删除、移动、重命名、提交、打标签、推送、运行安装包或修改业务代码。 |
 | 04-approved-cleanup | 已完成 | `docs/archive/04-cleanup-execution-log.md`、本状态文件 | A-1 与 B-1 已完成：B-1 的 NSIS 私有归档已验证，三个精确候选文件已删除并复核不存在；未运行、安装、签名或公开安装包，也未运行 Build、测试或服务。 |
 | 05-current-state-baseline | 已完成；等待进入 06-decommission | `docs/archive/03-feature-status.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、本状态文件 | 以清理前标签作为源码基线，记录功能状态、当前架构、设计差距和重构 Backlog；未运行新的 Build/Test/服务，未修改业务代码、依赖、Docker、Tauri 配置或运行时数据。 |
-| 06-decommission | 未开始 | - | - |
+| 06-decommission | 已完成检查；外部动作均待人工确认 | `docs/archive/07-decommission-checklist.md`、本状态文件 | 已完成仓库、Git、公开 GitHub API、Docker、Windows 候选和运行时数据边界的只读检查；未读取密钥或运行时数据，未关闭、删除、撤销、轮换或修改任何外部资源。 |
 | 07-retrospective-and-sop | 未开始 | - | - |
 | 08-final-acceptance | 未开始 | - | - |
 
@@ -51,12 +51,13 @@
 
 | 资源类别 | 是否存在 | 当前状态 | 下一步 | 用户确认 |
 | --- | --- | --- | --- | --- |
-| 源码托管（GitHub） | 已发现 `origin` 远端 | 仓库暂时保持公开；不启用 GitHub Archive，不改 README；远端历史名称为 `chatnotev`，产品名称为 Vault OS | 维持现状；后续按归档流程审查资产 | 已确认 |
-| 部署/托管 | 存在 Docker 与 Windows 发行线索，实际部署待确认 | 本阶段仅审查，不关闭 | 建立外部资源清单 | 已确认处理边界 |
-| 域名 | 待确认 | 未检查 | 确认是否存在域名及费用 | 未确认 |
-| API/模型服务 | 文档表明可配置兼容模型 API；实际账号/密钥待确认 | 本阶段仅审查，不停用、删除、撤销或轮换 | 若 API Key 可能共用，先确认归属 | 已确认处理边界 |
-| CI/CD | 未在本次根目录审查中发现工作流；发行脚本存在 | 本阶段仅审查，不变更自动化 | 检查自动任务与外部执行环境 | 已确认处理边界 |
-| 数据库/存储 | 本地 `vault/` 运行时数据与被忽略数据库规则存在 | 本阶段仅审查，不读取、迁移或清理 | 确认保留、备份和隐私审查范围 | 已确认处理边界 |
+| 源码托管（GitHub） | 本地 `origin` 为 `Finis-H/chatnotev`；公开查询解析为 `Finis-H/chatnote` | 公开、未归档、默认 `main`；0 Release、0 Actions 工作流；Issues 已启用、Discussions 未启用、Pages 端点 404 | 按 OQ-CLOSE-002 维持公开；用户确认 Issues、Webhook/Runner 和未来 Release 策略 | 仓库公开状态已确认；其它事项待确认 |
+| 部署/托管 | Docker 历史入口、Windows 发行脚本与 Tauri 配置存在；实际部署待确认 | Dockerfile 静态上指向旧模块；未运行 Docker 或 Build | 用户检查 Container、Registry、托管、Preview、监控和费用 | 已确认检查边界；实际资源待确认 |
+| 域名 | 未发现用户自有域名配置；GitHub Pages 端点 404 | 不能据此证明不存在其它 DNS、TLS、CDN 或静态托管 | 用户线下检查注册商、DNS、证书和账单 | 待确认 |
+| API/模型服务 | 源码提供 OpenAI 兼容对话 API 与 DashScope Embedding 配置字段 | 实际账号、Key、额度和账单未读取；Key 可能共用 | 用户确认 Provider、归属、保留/撤销/轮换决定 | 已确认检查边界；实际凭据待确认 |
+| CI/CD | 工作树无 `.github/`，公开 API 无工作流 | Webhook、组织级自动化、外部 Runner 与定时任务不能由当前证据排除 | 用户检查 GitHub/组织设置及第三方自动化 | 待确认 |
+| 数据库/存储 | 本地 `vault/`、`dist/vault/` 与被忽略 SQLite/Chroma 规则存在 | 未读取、迁移或清理；默认私有保留 | 用户决定备份、加密、访问、保留期、恢复和销毁条件 | 已确认检查边界；策略待确认 |
+| 私有发布资产 | `VAULT-OS-PRIV-NSIS-001` 已有 B-1 私有归档记录 | 哈希 `ACEEE0B63DEB9BBBE847E4DB548BEBE4EF3E6094A2930B1BAA987FC535E56162`；NSIS 源候选保留，MSI/旧 sidecar 已按 B-1 处理 | 私有保留；未来先完成隔离安装/卸载验证再决定发布 | 已确认私有保留规则 |
 
 ## 已确认决策与后续事项
 
@@ -73,6 +74,11 @@
 | OQ-AUDIT-001 | 审计候选的删除、移出主仓库或保留批次。 | 03 / 04 | 用户 | 部分已确认：A-1 已完成；B-1 已完成 CLN-023 的私有归档核验及 CLN-024 至 CLN-026 的删除；其余候选仍待逐项或逐批确认。 |
 | OQ-AUDIT-002 | Windows 安装包、MSI、sidecar 与运行时数据的私有归档/删除策略。 | 03 / 04 / 06 | 用户 | 部分已确认：B-1 的私有 NSIS 归档已验证，重复 NSIS、MSI 与旧 sidecar 已按授权删除；当前 sidecar、运行时数据及其它 Windows 候选仍不公开、不运行、不删除。 |
 | OQ-AUDIT-003 | Docker、动态插件依赖、Tauri 模板残留、Git 忽略规则和 Eval 文档冲突的处理策略。 | 03 / 04 / 05 | 用户 | 待确认；当前只记录风险，不修改代码、依赖、配置或文档事实。 |
+| OQ-DECOM-001 | 对话与 Embedding API 的账号、Key 归属、共用关系、额度与保留/撤销/轮换方案。 | 06 | 用户 | 待确认；实际凭据未读取，未执行任何安全变更。 |
+| OQ-DECOM-002 | Docker/Container、Registry、域名、DNS、TLS、托管、对象存储、监控和账单的实际存在性及处置方案。 | 06 | 用户 | 待确认；仓库静态线索和公开 API 不足以排除仓库外资源。 |
+| OQ-DECOM-003 | GitHub Webhook、组织级自动化、外部 Runner、定时任务、Issue 与未来 Release 的保留或关闭策略。 | 06 | 用户 | 待确认；当前仓库公开且未归档，0 Release、0 公开工作流。 |
+| OQ-DECOM-004 | `vault/`、`dist/vault/`、`build/*vault*` 的备份、加密、访问控制、保留期限、恢复方式和销毁条件。 | 06 | 用户 | 待确认；默认私有保留且未读取、移动或删除。 |
+| OQ-DECOM-005 | Figma 原文件、分享权限、作品集脱敏复核和席位/订阅状态。 | 06 | 用户 | 待确认；仓库无可定位的 Figma 原文件 URL 或公开链接。 |
 
 ## 最近一次验证
 
@@ -87,3 +93,4 @@
 | 2026-07-17 01:56 +08:00 | 完成 A-1 删除后的非破坏性复核。 | `__pycache__/`、`tests/__pycache__/`、`build/vault_engine/` 均不存在；`.venv/`、`vault/`、`dist/`、其它已列出的 `build/` 候选、`target/`、`temp/`、`vault_seed/` 均仍存在。 | 删除由用户手动完成；未运行 Build、测试、服务或安装包。文档静态检查与本地提交结果见本批次执行记录。 |
 | 2026-07-17 02:28 +08:00 | 完成 B-1 私有归档与删除后的非破坏性复核。 | `VAULT-OS-PRIV-NSIS-001` 哈希匹配；NSIS 源文件仍存在；重复 NSIS、MSI、旧 sidecar 均不存在；列出的 sidecar、运行时、构建、临时、配置与依赖排除范围均仍存在。 | 未运行、安装、签名或公开安装包，未运行 Build、测试或服务；文档静态检查与本地提交结果见本批次执行记录。 |
 | 2026-07-17 02:41 +08:00 | 完成 05 当前状态基线的只读审查与文档编写。 | 已写入功能状态、当前架构、设计/实现差距与重构 Backlog；源码基线为 `vault-os-pre-archive-20260716`，标签后仅有归档文档与清理记录。 | 未运行新的 Build、测试或服务；Windows 安装/卸载、Tauri bundle、动态插件、外部资源、运行时数据和 Eval 汇总冲突仍待后续人工确认。 |
+| 2026-07-17 15:29 +08:00 | 完成 06 外部资源、安全与运行环境的只读检查。 | 已写入 `07-decommission-checklist.md`；公开 GitHub API 确认仓库公开、未归档、0 Release、0 Actions 工作流、Issues 已启用、Discussions 未启用、Pages 端点 404；私有 NSIS 资产引用哈希与保留源候选一致。 | 未读取密钥、Token 或运行时数据，未运行 Build/Test/服务/安装包/Docker，未关闭、删除、撤销、轮换或修改任何外部资源；所有未决事项须用户线下确认。 |
