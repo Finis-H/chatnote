@@ -86,7 +86,7 @@ python server.py
 ## 文档导航
 
 - [../README.md](../README.md)：项目入口、启动方式、核心能力和当前状态。
-- [../PRODUCT.md](../PRODUCT.md)：产品定位、产品化改版边界、当前能力和 Roadmap。
+- [../docs/PRODUCT.md](../docs/PRODUCT.md)：产品定位、产品化改版边界、当前能力和 Roadmap。
 - [../AGENTS.md](../AGENTS.md)：全仓协作规则、修改约束和 Done Definition。
 - [./AGENTS.md](./AGENTS.md)：前端局部修改守则，包含 UI 风格、组件复用、高风险文案和验证要求。
 
