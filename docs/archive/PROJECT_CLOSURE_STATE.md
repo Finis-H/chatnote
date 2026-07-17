@@ -6,12 +6,12 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 当前工作包 | 07-retrospective-and-sop（已完成） |
-| 阶段状态 | 07 已完成 Vault OS 复盘与产品重构 SOP；下一步为 08-final-acceptance，尚未进入。C-1 已完成获准范围中的 `.venv/` 与 `target/` 清理；两个 Windows staging 目录及其它运行时数据仍保留并转入 OQ-DECOM-004。 |
-| 归档总状态 | 归档关闭中；清理前快照、只读审计、已批准清理批次 A-1/B-1/C-1、当前状态基线、外部资源处置清单、复盘与重构 SOP 均已记录。所有外部资源未决事项继续私有保留并待人工确认，未标记为已关闭。 |
-| 最近更新时间 | 2026-07-17（07-retrospective-and-sop 完成） |
+| 当前工作包 | 08-final-acceptance（已完成） |
+| 阶段状态 | 08 已完成最终静态验收、关闭报告、最终本地提交与轻量标签。C-1 已完成获准范围中的 `.venv/` 与 `target/` 清理；两个 Windows staging 目录及其它运行时数据仍保留并转入 OQ-DECOM-004。 |
+| 归档总状态 | 条件通过：归档关闭完成。清理前快照、只读审计、已批准清理批次 A-1/B-1/C-1、当前状态基线、外部资源处置清单、复盘、重构 SOP 与最终关闭报告均已记录。运行时数据和外部资源未决事项继续私有保留并待人工确认，未标记为已关闭。 |
+| 最近更新时间 | 2026-07-17（08-final-acceptance 完成） |
 | 负责人 | 用户（关闭边界、资产与对外决策）/ Codex（审查与已批准变更协助） |
-| 当前归档文档 | `docs/archive/00-closure-scope.md`、`docs/archive/01-final-snapshot.md`、`docs/archive/02-audit-manifest.md`、`docs/archive/03-feature-status.md`、`docs/archive/04-cleanup-execution-log.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、`docs/archive/07-decommission-checklist.md`、`docs/archive/REBUILD_ENVIRONMENT.md`、`docs/archive/VAULT_OS_RETROSPECTIVE.md`、`docs/archive/PRODUCT_REBUILD_SOP.md` |
+| 当前归档文档 | `docs/archive/00-closure-scope.md`、`docs/archive/01-final-snapshot.md`、`docs/archive/02-audit-manifest.md`、`docs/archive/03-feature-status.md`、`docs/archive/04-cleanup-execution-log.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、`docs/archive/07-decommission-checklist.md`、`docs/archive/08-closure-report.md`、`docs/archive/REBUILD_ENVIRONMENT.md`、`docs/archive/VAULT_OS_RETROSPECTIVE.md`、`docs/archive/PRODUCT_REBUILD_SOP.md` |
 | 未批准候选与运行时数据 | 仍保留。除 A-1、B-1 与 C-1 已记录的精确项外，其余候选、vault/、dist/vault/、当前 sidecar、bin/_internal/、vault_seed 与外部资源均未处理；C-1 的两个 staging 目录已转入 OQ-DECOM-004。所有未决外部事项按“私有保留、不得变更”处理。 |
 
 ## 版本锚点
@@ -23,9 +23,9 @@
 | 清理前标签 | `vault-os-pre-archive-20260716`（轻量标签，已建立并实际指向 `49b7b3e16a703abbb30ec0d753aad24a34b44ab1`） |
 | 清理前提交号 | `49b7b3e16a703abbb30ec0d753aad24a34b44ab1` |
 | 快照后状态元数据 | 本次 `docs: correct pre-archive checkpoint state` 本地提交将位于清理前标签之后；不移动、删除或重建该标签。 |
-| 最终归档标签 | `vault-os-archive-final-20260716`（已确认命名；未创建） |
-| 最终归档提交号 | 待后续工作包完成 |
-| 工作区状态 | B-1 删除后复核仅涉及批准路径、私有归档哈希和排除范围存在性；归档文档提交前的 Git 状态与静态检查见 `04-cleanup-execution-log.md`。 |
+| 最终归档标签 | `vault-os-archive-final-20260716`（轻量标签，指向承载 `08-closure-report.md` 与本状态更新的本次最终归档提交） |
+| 最终归档提交号 | 本次最终归档提交；以 `vault-os-archive-final-20260716` 的本地解析结果为准。 |
+| 工作区状态 | 08 开始时为干净工作区；最终提交与标签创建后应再次复核为干净。 |
 
 ## 已完成工作包
 
@@ -38,7 +38,7 @@
 | 05-current-state-baseline | 已完成；等待进入 06-decommission | `docs/archive/03-feature-status.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、本状态文件 | 以清理前标签作为源码基线，记录功能状态、当前架构、设计差距和重构 Backlog；未运行新的 Build/Test/服务，未修改业务代码、依赖、Docker、Tauri 配置或运行时数据。 |
 | 06-decommission | 已完成检查；外部动作均待人工确认 | `docs/archive/07-decommission-checklist.md`、本状态文件 | 已完成仓库、Git、公开 GitHub API、Docker、Windows 候选和运行时数据边界的只读检查；未读取密钥或运行时数据，未关闭、删除、撤销、轮换或修改任何外部资源。 |
 | 07-retrospective-and-sop | 已完成 | `docs/archive/VAULT_OS_RETROSPECTIVE.md`、`docs/archive/PRODUCT_REBUILD_SOP.md`、本状态文件 | 已基于归档范围、快照、审计、功能/架构/设计基线、Backlog、C-1 清理记录、环境快照和外部资源清单完成复盘与可复用 SOP；未虚构用户反馈、线上数据、安装验证、生产运行或已解决问题，未处理任何外部资源。 |
-| 08-final-acceptance | 未开始 | - | - |
+| 08-final-acceptance | 已完成（条件通过） | `docs/archive/08-closure-report.md`、本状态文件 | 清理前标签、文档存在性、已版本化 Markdown 相对链接、`git diff --check` 和归档隐私边界静态检查均通过；不重新运行 Build、测试、服务、Docker、Tauri 或安装包。最终标签仅指向本地最终归档提交，未推送。 |
 
 ## 已批准的清理批次
 
@@ -98,3 +98,4 @@
 | 2026-07-17 16:20 +08:00 | C-1 删除前环境快照与仅文件名级预检。 | 已创建 `REBUILD_ENVIRONMENT.md`；当前 sidecar 与排除范围仍存在。两个 staging 目录命中临时 vault、系统配置、聊天历史、SQLite Trace/WAL/SHM 与日志线索；仓库内 NSIS 源候选哈希与私有归档记录一致，但私有副本位置未记录，无法重新访问确认。 | 不读取命中文件内容；不删除任何目录或文件；不进入 07；未运行 Build、测试、服务、Docker、Tauri 或安装包。 |
 | 2026-07-17 17:00 +08:00 | C-1 用户手动删除后的只读复核。 | 用户确认 `VAULT-OS-PRIV-NSIS-001` 存在且哈希匹配；`.venv/` 与 `chat-ui/src-tauri/target/` 均不存在，删除前逻辑文件大小合计 11,485,126,277 bytes（10.696 GiB）。当前 sidecar、`bin/_internal/`、`vault/`、`dist/vault/`、`vault_seed/`、Chroma/SQLite 构建目录、全部 `build/smoke_vault_*` 与两个 staging 目录仍存在。 | 未读取 `temp`、`vault` 或运行时数据内容；未运行 Build、测试、服务、Docker、Tauri 或安装包。07 的前置条件已满足，但尚未开始。 |
 | 2026-07-17 | 完成 07-retrospective-and-sop。 | 已创建 Vault OS 专属复盘和面向未来重构/新 AI 产品的 SOP；状态推进为“07 已完成，下一步 08-final-acceptance”。C-1 已完成记录保持不变，两个 staging 目录和其它运行时数据继续受 OQ-DECOM-004 约束。 | 本阶段仅创建/更新三份归档文档；未运行 Build、测试、服务、Docker、Tauri 或安装包，未读取运行时数据，未关闭或修改外部资源。 |
+| 2026-07-17 | 完成 08-final-acceptance。 | 清理前标签仍指向 `49b7b3e16a703abbb30ec0d753aad24a34b44ab1`；工作包开始时工作区干净；归档文档存在性、已版本化 Markdown 相对链接、`git diff --check` 与归档隐私边界静态检查通过。已创建最终关闭报告、本地最终归档提交与轻量标签 `vault-os-archive-final-20260716`。 | 未重新运行 Build、测试、服务、Docker、Tauri 或安装包；运行结论仅引用 `01-final-snapshot.md`。未推送提交/标签，未处理运行时数据或外部资源；OQ-DECOM-001 至 OQ-DECOM-005 继续待用户确认。 |
