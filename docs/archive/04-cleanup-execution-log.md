@@ -1,6 +1,6 @@
 # Vault OS 已批准清理执行记录
 
-> 本记录只覆盖用户已批准的 A-1 与 B-1 批次。未列出的候选项均未获得对应批次授权，也未被处理。
+> 本记录覆盖用户已批准的 A-1、B-1 与 C-1 批次。未列出的候选项均未获得对应批次授权，也未被处理。
 
 ## A-1 批次
 
@@ -46,23 +46,23 @@
 - 除已完成的 CLN-017、CLN-019、CLN-024、CLN-025、CLN-026，以及 CLN-023 的已验证私有归档副本外，其余候选仍未获批准；后续批次必须由用户另行指定候选 ID、排除范围与验证方式。
 - 如需回退本批次，清理前内容可从清理前标签 `vault-os-pre-archive-20260716` 或对应构建流程重新取得；本次未创建、移动或修改任何 Git 标签。
 
-## C-1 容量清理批次（已停止）
+## C-1 容量清理批次（完成：部分清理、部分停止处理）
 
 | 字段 | 记录 |
 | --- | --- |
 | 执行日期 | 2026-07-17 |
-| 审批范围 | CLN-018、CLN-021、CLN-022；`.venv/`、两个指定 Windows staging 目录和 `chat-ui/src-tauri/target/`。 |
+| 审批范围 | CLN-018、CLN-021、CLN-022；`.venv/`、两个指定 Windows staging 目录和 `chat-ui/src-tauri/target/`。CLN-023 的仓库源候选位于已批准删除的 `target/` 内。 |
 | 删除前重建快照 | 已创建 `docs/archive/REBUILD_ENVIRONMENT.md`，记录 Python/pip/Node/npm/Rust/cargo 版本、三个锁/清单 SHA-256、脱敏 `pip freeze`、sidecar 状态和重建前提。 |
-| 私有 NSIS 预检 | 仓库内 NSIS 源候选存在，SHA-256 为 `ACEEE0B63DEB9BBBE847E4DB548BEBE4EF3E6094A2930B1BAA987FC535E56162`；与 `VAULT-OS-PRIV-NSIS-001` 的既有记录一致。私有归档位置未写入仓库，不能仅凭标识独立重新访问确认，因此不删除 `target/`。 |
-| sidecar 预检 | `chat-ui/src-tauri/bin/vault_engine-x86_64-pc-windows-msvc.exe` 与 `chat-ui/src-tauri/bin/_internal/` 均存在，未读取、运行或删除。 |
-| 两个 `temp/` 目录预检 | 仅文件名级检查即发现 `python-smoke-vault`/`smoke-vault`、`system_config.json`、`chat_history.json`、`vault_trace.db`/WAL/SHM 和多份日志。未读取内容；按任务停止条件，不处理这两个目录。 |
-| 实际删除路径 | 无。仓库规则禁止 Codex 对目录执行递归/批量删除；同时两个 `temp/` 目录不满足本批次的运行时数据安全门槛，`target/` 不满足私有归档复核门槛。 |
-| 实际释放空间 | `0 bytes`。删除前四个路径的逻辑文件大小合计为 12,054,817,896 bytes；这只是容量估算，不是已释放空间。 |
+| 私有 NSIS 复核 | 用户手动确认 `VAULT-OS-PRIV-NSIS-001` 私有归档存在且 SHA-256 匹配 `ACEEE0B63DEB9BBBE847E4DB548BEBE4EF3E6094A2930B1BAA987FC535E56162`。仓库不记录私有归档绝对路径。 |
+| sidecar 与受保护数据 | 当前 sidecar `chat-ui/src-tauri/bin/vault_engine-x86_64-pc-windows-msvc.exe`、`bin/_internal/`、`vault/`、`dist/vault/`、`vault_seed/`、列明的 Chroma/SQLite 构建目录和两个 staging 目录均存在；未读取其内容。 |
+| 两个 `temp/` 目录预检 | 仅文件名级检查即发现 `python-smoke-vault`/`smoke-vault`、`system_config.json`、`chat_history.json`、`vault_trace.db`/WAL/SHM 和多份日志。两个目录未被删除，CLN-021 转入 OQ-DECOM-004。 |
+| 实际删除路径 | 用户手动删除 `.venv/` 与 `chat-ui/src-tauri/target/`；只读复核确认两路径均不存在。后者包含 CLN-023 的仓库内 NSIS 源候选，故该候选也已不存在。 |
+| 实际释放空间 | 删除前两条路径的逻辑文件大小合计 `11,485,126,277 bytes`（`10.696 GiB`）。此值是已从工作树移除的文件容量；未采集文件系统可用空间的删除前基线，故不将其表述为物理磁盘可用空间增量。 |
 | Build、测试、服务、安装包 | 未执行。 |
-| 结果 | 已停止，未造成文件或运行时数据变更。 |
+| 结果 | CLN-018、CLN-022 已完成；CLN-023 的私有归档已确认且仓库源候选随 `target/` 删除；CLN-021 已停止处理并转入 OQ-DECOM-004。 |
 
 ### C-1 排除范围复核
 
-`vault/`、`dist/vault/`、`build/chroma_behavior_20260524221523/`、`build/legacy_chroma_20260524222107/`、全部 `build/smoke_vault_*`、`vault_seed/`、当前 sidecar、`bin/_internal/`、`chat-ui/node_modules/`、Dockerfile、依赖清单、业务代码、测试、`discard/`、Git 忽略规则和 README 均仍存在。未读取这些受保护范围的内容。
+`vault/`、`dist/vault/`、`build/chroma_behavior_20260524221523/`、`build/legacy_chroma_20260524222107/`、全部 `build/smoke_vault_*`、`vault_seed/`、当前 sidecar、`bin/_internal/`、两个指定 `temp/` 目录、`chat-ui/node_modules/`、Dockerfile、依赖清单、业务代码、测试、`discard/`、Git 忽略规则和 README 均仍存在。未读取这些受保护范围的内容。
 
-继续 C-1 前，需要用户决定两个 staging 目录中检测到的运行时数据的保留策略，提供可访问但不写入仓库的私有 NSIS 归档核验方式，并由用户手动处理任何仍获准删除的明确目录。之后仅进行存在性、实际释放空间与 Git 静态检查；不会补跑 Build、测试、服务、Docker、Tauri 或安装包。
+C-1 的已批准缓存清理已记录完毕。CLN-021 不再作为可清理缓存候选，而是由 OQ-DECOM-004 约束其后续的隐私、保留、恢复和销毁决策。后续仅在用户单独授权后处理该运行时数据范围；本批次未运行 Build、测试、服务、Docker、Tauri 或安装包。
