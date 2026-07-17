@@ -6,12 +6,12 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 当前工作包 | 06-decommission |
-| 阶段状态 | 06-decommission 的只读检查已完成；补充 C-1 已完成获准的缓存清理并将运行时数据候选转入 OQ-DECOM-004；尚未进入 07-retrospective-and-sop。 |
-| 归档总状态 | 归档关闭中；清理前快照、只读审计、已批准清理批次 A-1/B-1/C-1、当前状态基线与外部资源处置清单均已记录。 |
-| 最近更新时间 | 2026-07-17 17:00 +08:00 |
+| 当前工作包 | 07-retrospective-and-sop（已完成） |
+| 阶段状态 | 07 已完成 Vault OS 复盘与产品重构 SOP；下一步为 08-final-acceptance，尚未进入。C-1 已完成获准范围中的 `.venv/` 与 `target/` 清理；两个 Windows staging 目录及其它运行时数据仍保留并转入 OQ-DECOM-004。 |
+| 归档总状态 | 归档关闭中；清理前快照、只读审计、已批准清理批次 A-1/B-1/C-1、当前状态基线、外部资源处置清单、复盘与重构 SOP 均已记录。所有外部资源未决事项继续私有保留并待人工确认，未标记为已关闭。 |
+| 最近更新时间 | 2026-07-17（07-retrospective-and-sop 完成） |
 | 负责人 | 用户（关闭边界、资产与对外决策）/ Codex（审查与已批准变更协助） |
-| 当前归档文档 | `docs/archive/00-closure-scope.md`、`docs/archive/01-final-snapshot.md`、`docs/archive/02-audit-manifest.md`、`docs/archive/03-feature-status.md`、`docs/archive/04-cleanup-execution-log.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、`docs/archive/07-decommission-checklist.md`、`docs/archive/REBUILD_ENVIRONMENT.md` |
+| 当前归档文档 | `docs/archive/00-closure-scope.md`、`docs/archive/01-final-snapshot.md`、`docs/archive/02-audit-manifest.md`、`docs/archive/03-feature-status.md`、`docs/archive/04-cleanup-execution-log.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、`docs/archive/07-decommission-checklist.md`、`docs/archive/REBUILD_ENVIRONMENT.md`、`docs/archive/VAULT_OS_RETROSPECTIVE.md`、`docs/archive/PRODUCT_REBUILD_SOP.md` |
 | 未批准候选与运行时数据 | 仍保留。除 A-1、B-1 与 C-1 已记录的精确项外，其余候选、vault/、dist/vault/、当前 sidecar、bin/_internal/、vault_seed 与外部资源均未处理；C-1 的两个 staging 目录已转入 OQ-DECOM-004。所有未决外部事项按“私有保留、不得变更”处理。 |
 
 ## 版本锚点
@@ -37,7 +37,7 @@
 | 04-approved-cleanup | 已完成（A-1、B-1、C-1） | `docs/archive/04-cleanup-execution-log.md`、`docs/archive/REBUILD_ENVIRONMENT.md`、本状态文件 | C-1 已由用户手动删除 `.venv/` 与 `target/`，复核路径不存在并记录 10.696 GiB 的工作树逻辑文件容量；私有 NSIS 归档已确认，源候选随 `target/` 删除。两个 staging 目录因运行时数据线索未处理，已转入 OQ-DECOM-004；未运行 Build、测试、服务或安装包。 |
 | 05-current-state-baseline | 已完成；等待进入 06-decommission | `docs/archive/03-feature-status.md`、`docs/archive/04-architecture-as-is.md`、`docs/archive/05-design-implementation-gap.md`、`docs/archive/06-tech-debt-and-rebuild-backlog.md`、本状态文件 | 以清理前标签作为源码基线，记录功能状态、当前架构、设计差距和重构 Backlog；未运行新的 Build/Test/服务，未修改业务代码、依赖、Docker、Tauri 配置或运行时数据。 |
 | 06-decommission | 已完成检查；外部动作均待人工确认 | `docs/archive/07-decommission-checklist.md`、本状态文件 | 已完成仓库、Git、公开 GitHub API、Docker、Windows 候选和运行时数据边界的只读检查；未读取密钥或运行时数据，未关闭、删除、撤销、轮换或修改任何外部资源。 |
-| 07-retrospective-and-sop | 未开始 | - | - |
+| 07-retrospective-and-sop | 已完成 | `docs/archive/VAULT_OS_RETROSPECTIVE.md`、`docs/archive/PRODUCT_REBUILD_SOP.md`、本状态文件 | 已基于归档范围、快照、审计、功能/架构/设计基线、Backlog、C-1 清理记录、环境快照和外部资源清单完成复盘与可复用 SOP；未虚构用户反馈、线上数据、安装验证、生产运行或已解决问题，未处理任何外部资源。 |
 | 08-final-acceptance | 未开始 | - | - |
 
 ## 已批准的清理批次
@@ -97,3 +97,4 @@
 | 2026-07-17 15:29 +08:00 | 完成 06 外部资源、安全与运行环境的只读检查。 | 已写入 `07-decommission-checklist.md`；公开 GitHub API 确认仓库公开、未归档、0 Release、0 Actions 工作流、Issues 已启用、Discussions 未启用、Pages 端点 404；私有 NSIS 资产引用哈希与保留源候选一致。 | 未读取密钥、Token 或运行时数据，未运行 Build/Test/服务/安装包/Docker，未关闭、删除、撤销、轮换或修改任何外部资源；所有未决事项须用户线下确认。 |
 | 2026-07-17 16:20 +08:00 | C-1 删除前环境快照与仅文件名级预检。 | 已创建 `REBUILD_ENVIRONMENT.md`；当前 sidecar 与排除范围仍存在。两个 staging 目录命中临时 vault、系统配置、聊天历史、SQLite Trace/WAL/SHM 与日志线索；仓库内 NSIS 源候选哈希与私有归档记录一致，但私有副本位置未记录，无法重新访问确认。 | 不读取命中文件内容；不删除任何目录或文件；不进入 07；未运行 Build、测试、服务、Docker、Tauri 或安装包。 |
 | 2026-07-17 17:00 +08:00 | C-1 用户手动删除后的只读复核。 | 用户确认 `VAULT-OS-PRIV-NSIS-001` 存在且哈希匹配；`.venv/` 与 `chat-ui/src-tauri/target/` 均不存在，删除前逻辑文件大小合计 11,485,126,277 bytes（10.696 GiB）。当前 sidecar、`bin/_internal/`、`vault/`、`dist/vault/`、`vault_seed/`、Chroma/SQLite 构建目录、全部 `build/smoke_vault_*` 与两个 staging 目录仍存在。 | 未读取 `temp`、`vault` 或运行时数据内容；未运行 Build、测试、服务、Docker、Tauri 或安装包。07 的前置条件已满足，但尚未开始。 |
+| 2026-07-17 | 完成 07-retrospective-and-sop。 | 已创建 Vault OS 专属复盘和面向未来重构/新 AI 产品的 SOP；状态推进为“07 已完成，下一步 08-final-acceptance”。C-1 已完成记录保持不变，两个 staging 目录和其它运行时数据继续受 OQ-DECOM-004 约束。 | 本阶段仅创建/更新三份归档文档；未运行 Build、测试、服务、Docker、Tauri 或安装包，未读取运行时数据，未关闭或修改外部资源。 |
